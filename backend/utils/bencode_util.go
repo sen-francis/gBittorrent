@@ -2,10 +2,11 @@ package utils
 
 import (
 	"bufio"
+	"fmt"
 	"strconv"
 )
 
-func decode(reader *bufio.Reader) any {
+func Decode(reader *bufio.Reader) any {
 	b, err := reader.ReadByte()
 
 	if err != nil {
@@ -13,24 +14,34 @@ func decode(reader *bufio.Reader) any {
 	}
 
 	if b == 'd' {
-		return DecodeDictionary(reader)
+		return decodeDictionary(reader)
 	} else if b == 'l' {
 		return decodeList(reader)
 	} else if b == 'i' {
 		return decodeInteger(reader, 'e')
-	} else if _, err := strconv.Atoi(string(b)); err == nil {
+	} else if b >= '0' && b <= '9' {
+		reader.UnreadByte()
 		return decodeString(reader)
 	}
 
 	return "blah"
 }
 
-func DecodeDictionary(reader *bufio.Reader) map[string]any {
-	dictionary := map[string]any{}	
-	for b, err := reader.Peek(1); err == nil && len(b) > 0 && b[0] != 'e'; b, err = reader.Peek(1) {
+func decodeDictionary(reader *bufio.Reader) map[string]any {
+	dictionary := map[string]any{}
+	b, err := reader.Peek(1)
+	for err == nil && len(b) > 0 && b[0] != 'e' {
 		key := decodeString(reader)
-		value := decode(reader)
+		if key == "pieces" {
+			fmt.Println("hi")
+		}
+		value := Decode(reader)
 		dictionary[key] = value
+		b, err = reader.Peek(1)
+	}
+
+	if b[0] == 'e' {
+		reader.ReadByte()
 	}
 
 	return dictionary
@@ -38,9 +49,16 @@ func DecodeDictionary(reader *bufio.Reader) map[string]any {
 
 func decodeList(reader *bufio.Reader) []any {
 	list := []any{}
-	for b, err := reader.Peek(1); err == nil && len(b) > 0 && b[0] != 'e'; b, err = reader.Peek(1) {
-		list = append(list, decode(reader))	
+	b, err := reader.Peek(1)
+	for err == nil && len(b) > 0 && b[0] != 'e' {
+		list = append(list, Decode(reader))
+		b, err = reader.Peek(1)
 	}
+
+	if b[0] == 'e' {
+		reader.ReadByte()
+	}
+
 	return list
 }
 
