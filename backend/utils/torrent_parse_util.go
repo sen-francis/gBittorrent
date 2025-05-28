@@ -26,27 +26,6 @@ func ParseTorrentFile(filePath string) string {
 
 	reader := bufio.NewReader(file)
 	// infinite loop
-	count := 0
-	for {
-
-		b,err := reader.ReadByte()
-
-		if err != nil && !errors.Is(err, io.EOF) {
-			fmt.Println(err)
-			break
-		}
-
-		if b == 'd' {
-		// process the one byte b
-			fmt.Println(b)
-			fmt.Println(count)
-		}
-		
-		if err != nil {
-			// end of file
-			break
-		}
-		count++
-	}
+	fmt.Print(len(DecodeDictionary(reader)))
 	return ""
 }
