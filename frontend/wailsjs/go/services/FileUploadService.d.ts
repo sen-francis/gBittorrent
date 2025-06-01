@@ -5,4 +5,4 @@ import {services} from '../models';
 
 export function Init(arg1:context.Context):Promise<void>;
 
-export function SelectFile():Promise<services.File>;
+export function SelectFile():Promise<services.FileUploadResponse>;

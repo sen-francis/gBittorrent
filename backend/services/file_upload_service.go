@@ -1,7 +1,7 @@
 package services
 
 import (
-	"bittorrent/backend/utils"
+	"bittorrent/backend/torrent"
 	"context"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -11,9 +11,9 @@ type FileUploadService struct {
 	ctx	context.Context
 }
 
-type File struct {
-	Data string `json:"file"`
-	Err error `json:"error"`
+type FileUploadResponse struct {
+	TorrentMetainfo torrent.TorrentMetainfo 
+	Err error 
 }
 
 var fileUploadService *FileUploadService
@@ -29,7 +29,7 @@ func (fileUploadService *FileUploadService) Init(ctx context.Context) {
 	fileUploadService.ctx = ctx
 }
 
-func (fileUploadService *FileUploadService) SelectFile() File {
+func (fileUploadService *FileUploadService) SelectFile() FileUploadResponse {
 	filePath, err := runtime.OpenFileDialog(fileUploadService.ctx, runtime.OpenDialogOptions{
 		Title: "Select torrent file",
 		Filters: []runtime.FileFilter{
@@ -40,13 +40,19 @@ func (fileUploadService *FileUploadService) SelectFile() File {
 		},	
 	})
 
-	if (err != nil) {
-		// TODO SEN: blowup 
+	if (err != nil) {	
+		return FileUploadResponse{ 
+			TorrentMetainfo: torrent.TorrentMetainfo{}, 
+			Err: err,
+		}
 	}
 
-	utils.ParseTorrentFile(filePath)
-
-	return File{Data: filePath, Err: err}
+	torrentMetainfo, err := torrent.ParseTorrentFile(filePath)
 	
+	return FileUploadResponse{ 
+		TorrentMetainfo: torrentMetainfo, 
+		Err: err,
+	}
+
 }
 

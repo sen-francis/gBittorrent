@@ -1,9 +1,14 @@
-package utils
+package torrent
 
 import (
-	"os"
+	"bittorrent/backend/collections"
+	"bittorrent/backend/utils"
 	"bufio"
+	"bytes"
+	"crypto/sha1"
 	"errors"
+	"os"
+	"strconv"
 )
 
 type FileInfo struct {
@@ -22,7 +27,7 @@ type TorrentInfo struct {
 
 type TorrentMetainfo struct {
 	Info TorrentInfo
-	InfoHash string
+	InfoHash [20]byte
 	Announce string
 	AnnounceList [][]string
 	CreationDate int
@@ -146,7 +151,7 @@ func parseMultiFileInfoDictionary(dictionary map[string]any) (TorrentInfo, error
 	files := dictionary["files"].([]map[string]any)
 	for _, file := range files {
 		fileInfo := FileInfo { Length: file["length"].(int64), Path: file["path"].([]string) }	
-		
+
 		if md5sum, ok := file["md5sum"]; ok {
 			if md5sum, ok := md5sum.(string); ok {
 				fileInfo.Md5Sum = md5sum
@@ -195,9 +200,9 @@ func parseSingleFileInfoDictionary(dictionary map[string]any) (TorrentInfo, erro
 func parseInfoDictionary(dictionary map[string]any) (TorrentInfo, error) {
 	_, isMultiFile := dictionary["files"]
 	if isMultiFile {
-		return parseSingleFileInfoDictionary(dictionary)
-	} else {
 		return parseMultiFileInfoDictionary(dictionary)
+	} else {
+		return parseSingleFileInfoDictionary(dictionary)
 	}
 }
 
@@ -224,33 +229,130 @@ func isTorrentMetainfoFileValid(dictionary map[string]any) bool {
 	return true
 }
 
+func splitAt(substring string) func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	searchBytes := []byte(substring)
+	searchLen := len(searchBytes)
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		dataLen := len(data)
+
+		// Return nothing if at end of file and no data passed
+		if atEOF && dataLen == 0 {
+			return 0, nil, nil
+		}
+
+		// Find next separator and return token
+		if i := bytes.Index(data, searchBytes); i >= 0 {
+			return i + searchLen, data[0:i], nil
+		}
+
+		// If we're at EOF, we have a final, non-terminated line. Return it.
+		if atEOF {
+			return dataLen, data, nil
+		}
+
+		// Request more data.
+		return 0, nil, nil
+	}
+}
+
+func extractBencodedInfo(scanner *bufio.Scanner) (string, error) {
+	scanner.Split(splitAt("4:info"))
+
+	bencodedText := ""
+	for scanner.Scan() {
+		bencodedText = scanner.Text()
+	}
+
+	stack := collections.Stack[byte]{}
+	bencodedInfo := ""
+	bencodedTextArr := []byte(bencodedText)
+	i := 0
+	for i < len(bencodedTextArr) {
+		if i != 0 && stack.IsEmpty() {
+			break
+		}
+
+		c := bencodedTextArr[i]
+
+		if c >= '0' && c <= '9' {
+			numStr := ""
+			for bencodedTextArr[i] != ':' {
+				numStr += string(bencodedTextArr[i])
+				i++
+			}
+			bencodedInfo += numStr + ":"
+			i++
+			num, err := strconv.ParseInt(numStr, 10, 0)
+			if err != nil {
+				return "", err
+			}
+			bencodedInfo += string(bencodedTextArr[i:i+int(num)])
+			i += int(num)
+			continue
+		}
+
+		switch c {
+		case 'i':
+			for bencodedTextArr[i] != 'e' {
+				bencodedInfo += string(bencodedTextArr[i])
+				i++
+			}
+			bencodedInfo += "e"
+			i++
+			continue
+		case 'd', 'l':
+			stack.Push(c)
+		case 'e':
+			stack.Pop()
+		}
+
+		bencodedInfo += string(c)
+		i++
+	}
+
+	return bencodedInfo, nil
+}
+
 func ParseTorrentFile(filePath string) (TorrentMetainfo, error) {
 	file, err := os.Open(filePath)
-	var torrentMetainfo TorrentMetainfo
 	if err != nil {
-		return torrentMetainfo, err
+		return TorrentMetainfo{}, err
 	}
+	defer file.Close()
 
 	fileStat, err := file.Stat()
 	if err != nil {
-		return torrentMetainfo, err
+		return TorrentMetainfo{}, err
 	}
 
 	reader := bufio.NewReaderSize(file, int(fileStat.Size()))
-	dictionary, ok := Decode(reader).(map[string]any)
+
+	result, err := utils.Decode(reader)
+	if err != nil {
+		return TorrentMetainfo{}, err
+	}
+
+	dictionary, ok := result.(map[string]any)
 	if !ok || !isTorrentMetainfoFileValid(dictionary) {
-		return torrentMetainfo, errors.New("TorrentMetainfo file is invalid.")
+		return TorrentMetainfo{}, errors.New("TorrentMetainfo file is invalid.")
 	}
 
 	infoDictionary := dictionary["info"].(map[string]any)
 
 	info, err := parseInfoDictionary(infoDictionary)
-
 	if err != nil {
-		return torrentMetainfo, err
+		return TorrentMetainfo{}, err
 	}
 
+	var torrentMetainfo TorrentMetainfo
 	torrentMetainfo.Info = info
+
+	file.Seek(0, 0)
+	bencodedInfo, err := extractBencodedInfo(bufio.NewScanner(file))
+	if err != nil {
+		return TorrentMetainfo{}, nil
+	}
+	torrentMetainfo.InfoHash = sha1.Sum([]byte(bencodedInfo))
 
 	torrentMetainfo.Announce = dictionary["announce"].(string)
 

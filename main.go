@@ -15,6 +15,7 @@ var assets embed.FS
 
 func main() {
 	fileUploadService := services.GetFileUploadService()
+	trackerService := services.GetTrackerService()
 
 	// Create application with options
 	err := wails.Run(&options.App{
@@ -27,9 +28,11 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup: func(ctx context.Context) {
 			fileUploadService.Init(ctx)
+			trackerService.Init(ctx)
 		},
 		Bind: []interface{}{
 			fileUploadService,
+			trackerService,
 		},
 	})
 

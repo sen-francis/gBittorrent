@@ -2,15 +2,16 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strconv"
 )
 
-func Decode(reader *bufio.Reader) any {
+func Decode(reader *bufio.Reader) (any, error) {
 	b, err := reader.ReadByte()
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if b == 'd' {
@@ -23,61 +24,84 @@ func Decode(reader *bufio.Reader) any {
 		reader.UnreadByte()
 		return decodeString(reader)
 	}
-
-	return "blah"
+	
+	errorMessage := fmt.Sprintf("Could not decode bencoded text. Found unexpected char: %c", b)
+	return "", errors.New(errorMessage)
 }
 
-func decodeDictionary(reader *bufio.Reader) map[string]any {
+func decodeDictionary(reader *bufio.Reader) (map[string]any, error) {
 	dictionary := map[string]any{}
 	b, err := reader.Peek(1)
 	for err == nil && len(b) > 0 && b[0] != 'e' {
-		key := decodeString(reader)
-		if key == "pieces" {
-			fmt.Println("hi")
+		key, err := decodeString(reader)
+		if err != nil {
+			return map[string]any{}, err
 		}
-		value := Decode(reader)
+
+		value, err := Decode(reader)
+		if err != nil {
+			return map[string]any{}, err
+		}
+
 		dictionary[key] = value
 		b, err = reader.Peek(1)
+		if err != nil {
+			return map[string]any{}, err
+		}
 	}
 
 	if b[0] == 'e' {
 		reader.ReadByte()
+	} else {
+		return map[string]any{}, errors.New("Did not find dictionary terminator.")
 	}
 
-	return dictionary
+	return dictionary, nil
 }
 
-func decodeList(reader *bufio.Reader) []any {
+func decodeList(reader *bufio.Reader) ([]any, error) {
 	list := []any{}
 	b, err := reader.Peek(1)
 	for err == nil && len(b) > 0 && b[0] != 'e' {
-		list = append(list, Decode(reader))
+		val, err :=  Decode(reader)
+		if err != nil {
+			return []any{}, err
+		}
+		list = append(list, val)
 		b, err = reader.Peek(1)
+		if err != nil {
+			return []any{}, err
+		}
 	}
 
 	if b[0] == 'e' {
 		reader.ReadByte()
+	} else {
+		return []any{}, errors.New("Did not find list terminator.")
 	}
 
-	return list
+
+	return list, nil
 }
 
-func decodeString(reader *bufio.Reader) string {
-	strLength := decodeInteger(reader, ':')
+func decodeString(reader *bufio.Reader) (string, error) {
+	strLength, err := decodeInteger(reader, ':')
+	if err != nil {
+		return "", err
+	}
 	buf := make([]byte, strLength)
 	n, err := reader.Read(buf)
 	if (err != nil || n != int(strLength)) {
-		// TODO SEN: blow up
-		return ""
+		return "", errors.New("Error while decoding byte string.")
 	}
-	return string(buf)
+	return string(buf), nil
 }
 
-func decodeInteger(reader *bufio.Reader, delimeter byte) int64 {
+func decodeInteger(reader *bufio.Reader, delimeter byte) (int64, error) {
 	numberStr, err := reader.ReadSlice(delimeter)
 	
 	if err != nil {
-		return 0	
+		return 0, errors.New("Did not find integer terminator")	
 	}
 
 	numberStr = numberStr[:len(numberStr) - 1]
@@ -85,10 +109,9 @@ func decodeInteger(reader *bufio.Reader, delimeter byte) int64 {
 	num, err := strconv.ParseInt(string(numberStr), 10, 64)
 
 	if (err != nil) {
-		// TODO SEN add error
-		return 0
+		return 0, errors.New("Could not convert string to integer")
 	}
 
-	return num
+	return num, nil
 }
 
