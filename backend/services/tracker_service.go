@@ -17,15 +17,16 @@ type TrackerService struct {
 }
 
 type TrackerResponse struct {
-	interval int64
-	peers string
+	Interval int64
+	Peers string
 	Err error
 }
 
 type TrackerScrapeResponse struct {
-	downloaded int64
-	seeders int64
-	leechers int64
+	Downloaded int32
+	Seeders int32
+	Leechers int32
+	Name string	
 	Err error
 }
 
@@ -61,14 +62,14 @@ func (trackerService *TrackerService) FetchPeers(torrentMetainfo *torrent.Torren
 	}
 	//Convert the body to type string
 	sb := string(body)
-	
+
 	trackerResponse := TrackerResponse{}
 
 	fmt.Printf(sb)
 	return trackerResponse, nil
 }
 
-func parseTrackerScrapeResponse(response string) TrackerScrapeResponse {
+func parseTrackerScrapeResponse(response string, infoHash string) TrackerScrapeResponse {
 	reader := bufio.NewReaderSize(strings.NewReader(response), len(response))
 
 	result, err := utils.Decode(reader)
@@ -80,28 +81,55 @@ func parseTrackerScrapeResponse(response string) TrackerScrapeResponse {
 	if !ok {
 		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
 	}
-	files, ok := dictionary["files"];
 
-	if ok {
-		if _, ok := files.([]any); !ok {
-			return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
-		} else {
-			return  TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
-		}
-
+	if _, ok := dictionary["files"]; !ok {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
 	}
 
-	if files, ok := dictionary["files"]; ok {
-		if _, ok := files.([]any); !ok {
-			return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
-		}
-
+	files, ok := dictionary["files"].(map[string]any)
+	if !ok {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
 	}
 
-	func (trackerService *TrackerService) ScrapeTracker(torrentMetainfo *torrent.TorrentMetainfo) TrackerScrapeResponse {
-		scrapeRequestUrl, err := torrentMetainfo.BuildScrapeRequest()
-		if err != nil {
-			return TrackerScrapeResponse{ Err: err}
+	if len(files) != 1 {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
+	}
+
+	if _, ok := files[infoHash]; !ok {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
+	}
+
+	torrentData, ok := files[infoHash].(map[string]any)
+	if !ok {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
+	}
+
+	var trackerScrapeResponse TrackerScrapeResponse;
+	seeders, ok := torrentData["complete"].(int64)
+	if !ok {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
+	}
+	trackerScrapeResponse.Seeders = int32(seeders)
+
+	leechers, ok := torrentData["incomplete"].(int64)
+	if !ok {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
+	}
+	trackerScrapeResponse.Leechers = int32(leechers)
+
+	downloaded, ok := torrentData["downloaded"].(int64)
+	if !ok {
+		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
+	}
+	trackerScrapeResponse.Downloaded = int32(downloaded)
+	trackerScrapeResponse.Name = torrentData["name"].(string)
+
+	return trackerScrapeResponse 
+}
+func (trackerService *TrackerService) ScrapeTracker(torrentMetainfo *torrent.TorrentMetainfo) TrackerScrapeResponse {
+	scrapeRequestUrl, err := torrentMetainfo.BuildScrapeRequest()
+	if err != nil {
+		return TrackerScrapeResponse{ Err: err}
 	}
 
 	resp, err := http.Get(scrapeRequestUrl)
@@ -119,9 +147,9 @@ func parseTrackerScrapeResponse(response string) TrackerScrapeResponse {
 	//Convert the body to type string
 	sb := string(body)
 
-	
 
-	trackerScrapeResponse := TrackerScrapeResponse{ }
+
+	trackerScrapeResponse := parseTrackerScrapeResponse(sb, string(torrentMetainfo.InfoHash[:]))
 
 	fmt.Printf(sb)
 	return trackerScrapeResponse

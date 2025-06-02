@@ -53,24 +53,24 @@ func (torrentMetainfo *TorrentMetainfo) BuildTrackerRequest() (string, error) {
 }
 
 func (torrentMetainfo *TorrentMetainfo) BuildScrapeRequest() (string, error) {
-	splitAnnounce := strings.Split(torrentMetainfo.Announce,"\\")
+	splitAnnounce := strings.Split(torrentMetainfo.Announce,"/")
 	text := splitAnnounce[len(splitAnnounce) - 1]
-	if strings.HasPrefix(text, "announce") {
-		scrapeUrl := strings.Replace(text, "announce", "scrape", 1)
-		splitAnnounce[len(splitAnnounce) - 1] = scrapeUrl
-		scrapeUrl = strings.Join(splitAnnounce, "\\")
-		scrapeRequest, err := url.Parse(scrapeUrl)
-		if err != nil {
-			return "", err
-		}
-
-		urlParams := url.Values{
-			"info_hash": []string{string(torrentMetainfo.InfoHash[:])},
-		}
-
-		scrapeRequest.RawQuery = urlParams.Encode()
-		return scrapeRequest.String(), nil
+	if !strings.HasPrefix(text, "announce") {
+		return "", errors.New("Tracker has no scrape convention")
 	}
 
-	return "", errors.New("Tracker has no scrape convention")
+	scrapeUrl := strings.Replace(text, "announce", "scrape", 1)
+	splitAnnounce[len(splitAnnounce) - 1] = scrapeUrl
+	scrapeUrl = strings.Join(splitAnnounce, "/")
+	scrapeRequest, err := url.Parse(scrapeUrl)
+	if err != nil {
+		return "", err
+	}
+
+	urlParams := url.Values{
+		"info_hash": []string{string(torrentMetainfo.InfoHash[:])},
+	}
+
+	scrapeRequest.RawQuery = urlParams.Encode()
+	return scrapeRequest.String(), nil
 }

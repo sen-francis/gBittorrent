@@ -157,7 +157,8 @@ func parseMultiFileInfoDictionary(dictionary map[string]any) (TorrentInfo, error
 				fileInfo.Md5Sum = md5sum
 			}
 		}
-
+		
+		fileInfoList = append(fileInfoList, fileInfo)
 	}
 
 	torrentInfo.FileInfoList = fileInfoList
