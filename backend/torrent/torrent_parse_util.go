@@ -34,6 +34,7 @@ type TorrentMetainfo struct {
 	Comment string
 	CreatedBy string
 	Encoding string
+	Size int64
 }
 
 func isFileListValid(fileList []map[string]any) bool {
@@ -314,6 +315,16 @@ func extractBencodedInfo(scanner *bufio.Scanner) (string, error) {
 	return bencodedInfo, nil
 }
 
+
+func (torrentInfo *TorrentInfo) getTotalTorrentBytes() int64 {
+	totalBytes := int64(0)
+	for _, fileInfo := range torrentInfo.FileInfoList {
+		totalBytes += fileInfo.Length
+	}
+
+	return totalBytes
+}
+
 func ParseTorrentFile(filePath string) (TorrentMetainfo, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -386,7 +397,8 @@ func ParseTorrentFile(filePath string) (TorrentMetainfo, error) {
 			torrentMetainfo.Encoding = encoding
 		}
 	}
-
+	
+	torrentMetainfo.Size = torrentMetainfo.Info.getTotalTorrentBytes()
 
 	return torrentMetainfo, nil
 }

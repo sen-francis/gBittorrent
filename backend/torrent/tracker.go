@@ -22,15 +22,6 @@ func generatePeerId() string {
 	return AZ_CLIENT_PREFIX + random
 }
 
-func (torrentInfo *TorrentInfo) getTotalTorrentBytes() int64 {
-	totalBytes := int64(0)
-	for _, fileInfo := range torrentInfo.FileInfoList {
-		totalBytes += fileInfo.Length
-	}
-
-	return totalBytes
-}
-
 func (torrentMetainfo *TorrentMetainfo) BuildTrackerRequest() (string, error) {
 	trackerRequest, err := url.Parse(torrentMetainfo.Announce)
 	if err != nil {
@@ -43,7 +34,7 @@ func (torrentMetainfo *TorrentMetainfo) BuildTrackerRequest() (string, error) {
 		"port": []string{"6888"},
 		"uploaded": []string{"0"},
 		"downloaded": []string{"0"},
-		"left": []string{string(torrentMetainfo.Info.getTotalTorrentBytes())},
+		"left": []string{string(torrentMetainfo.Size)},
 		"compact": []string{"1"},
 		"event": []string{"started"},
 	}

@@ -136,6 +136,7 @@ export namespace torrent {
 	    Comment: string;
 	    CreatedBy: string;
 	    Encoding: string;
+	    Size: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TorrentMetainfo(source);
@@ -151,6 +152,7 @@ export namespace torrent {
 	        this.Comment = source["Comment"];
 	        this.CreatedBy = source["CreatedBy"];
 	        this.Encoding = source["Encoding"];
+	        this.Size = source["Size"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
