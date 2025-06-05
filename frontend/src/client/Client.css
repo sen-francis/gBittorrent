@@ -1,0 +1,16 @@
+.add-torrent-modal__body {
+	display: flex;
+	flex-direction: row;
+	gap: 100px;
+}
+
+.torrent-information {
+	display: flex;
+	flex-direction: column;
+}
+
+.torrent-information__body {
+	display: flex;
+	flex-direction: column;
+	align-items: start;
+}
