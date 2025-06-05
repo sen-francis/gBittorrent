@@ -16,22 +16,22 @@ func (stack *Stack[T]) Push(value T) {
 }
 
 func (stack *Stack[T]) Pop() (T, error) {
-	if stack.values == nil {
+	if stack.IsEmpty() {
 		var result T
 		return result, errors.New("Cannot invoke Pop() on empty Stack.")
 	}
 
-	value := stack.values[len(stack.values) - 1:][0]
+	value := stack.values[len(stack.values) - 1]
 	stack.values = stack.values[:len(stack.values) - 1]
 	return value, nil
 }
 
 func (stack *Stack[T]) Peek() (T, error) {
-	if stack.values == nil {
+	if stack.IsEmpty() {
 		var result T
 		return result, errors.New("Cannot invoke Peek() on empty Stack.")
 	}
-	return stack.values[len(stack.values) - 1:][0], nil
+	return stack.values[len(stack.values) - 1], nil
 }
 
 func (stack *Stack[T]) Length() int {

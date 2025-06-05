@@ -3,6 +3,7 @@ package services
 import (
 	"bittorrent/backend/torrent"
 	"bittorrent/backend/utils"
+	"bittorrent/backend/collections"
 	"bufio"
 	"context"
 	"fmt"
@@ -41,6 +42,13 @@ func GetTrackerService() *TrackerService {
 
 func (trackerService *TrackerService) Init(ctx context.Context) {
 	trackerService.ctx = ctx
+}
+
+func (trackerService *TrackerService) StartDownload(torrentMetainfo *torrent.TorrentMetainfo) () {
+	queue := collections.Queue[torrent.Peer]{}
+	for {
+	
+	}
 }
 
 func (trackerService *TrackerService) FetchPeers(torrentMetainfo *torrent.TorrentMetainfo) (TrackerResponse, error) {
@@ -126,6 +134,7 @@ func parseTrackerScrapeResponse(response string, infoHash string) TrackerScrapeR
 
 	return trackerScrapeResponse 
 }
+
 func (trackerService *TrackerService) ScrapeTracker(torrentMetainfo *torrent.TorrentMetainfo) TrackerScrapeResponse {
 	scrapeRequestUrl, err := torrentMetainfo.BuildScrapeRequest()
 	if err != nil {

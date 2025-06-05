@@ -43,6 +43,11 @@ func (torrentMetainfo *TorrentMetainfo) BuildTrackerRequest() (string, error) {
 	return trackerRequest.String(), nil
 }
 
+func (torrentMetainfo *TorrentMetainfo) FetchPeers() ([]Peer, error) {
+	
+	return nil, nil
+}
+
 func (torrentMetainfo *TorrentMetainfo) BuildScrapeRequest() (string, error) {
 	splitAnnounce := strings.Split(torrentMetainfo.Announce,"/")
 	text := splitAnnounce[len(splitAnnounce) - 1]
