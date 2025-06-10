@@ -11,6 +11,7 @@ import (
 
 const PSTR_LEN = 19
 const PSTR = "BitTorrent protocol"
+const HANDSHAKE_LEN = 68
 
 type Peer struct {
 	PeerId string 
@@ -39,22 +40,36 @@ func (peer *Peer) Connect(infoHash string) (error) {
 	return nil
 }
 
+func (peer *Peer) generateHandshake(infoHash string) []byte {
+	handshake := make([]byte, HANDSHAKE_LEN)
+	handshake[0] = byte(PSTR_LEN)
+	index := 1	
+	index += copy(handshake[index:], PSTR)
+	index += copy(handshake[index:], make([]byte, 8))
+	index += copy(handshake[index:], []byte(infoHash))
+	copy(handshake[index:], []byte(GeneratePeerId()))
+	return handshake
+}
+
 func (peer *Peer) handshake(conn net.Conn, infoHash string) error {
-	[]byte
-	_, err := conn.Write([]byte(strEcho))
+	handshake := peer.generateHandshake(infoHash)
+	_, err := conn.Write(handshake)
 	if err != nil {
 		errorMessage := fmt.Sprintf("Failed to connect to peer at %s", peer.String())
 		conn.Close()
 		return errors.New(errorMessage)
 	}
-
-	reply := make([]byte, 1024)
 	
-	// todo sen: wait up to a minute for an unchoke response
-	_, err = conn.Read(reply)
-	if err != nil {
-		conn.Close()
-		println("Write to server failed:", err.Error())
+	start := time.Now()	
+	reply := make([]byte, 1024)
+
+	for time.Since(start) < 2 * time.Minute {
+		// todo sen: wait up to a minute for an unchoke response
+		_, err = conn.Read(reply)
+		if err != nil {
+			conn.Close()
+			println("Write to server failed:", err.Error())
+		}
 	}
 
 }
