@@ -1,6 +1,8 @@
 package collections
 
-import "errors"
+import (
+	"errors"
+)
 
 type Queue[T any] struct {
 	values[]T
@@ -13,6 +15,15 @@ func (queue *Queue[T]) Push(value T) {
 	}
 
 	queue.values = append(queue.values, value)
+}
+
+func (queue *Queue[T]) PushSlice(slice []T) {
+	if queue.values == nil {
+		queue.values = slice
+		return
+	}
+
+	queue.values = append(queue.values, slice...)
 }
 
 func (queue *Queue[T]) Pop() (T, error) {

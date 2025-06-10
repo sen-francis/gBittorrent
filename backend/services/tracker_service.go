@@ -3,7 +3,6 @@ package services
 import (
 	"bittorrent/backend/torrent"
 	"bittorrent/backend/utils"
-	"bittorrent/backend/collections"
 	"bufio"
 	"context"
 	"fmt"
@@ -44,38 +43,7 @@ func (trackerService *TrackerService) Init(ctx context.Context) {
 	trackerService.ctx = ctx
 }
 
-func (trackerService *TrackerService) StartDownload(torrentMetainfo *torrent.TorrentMetainfo) () {
-	queue := collections.Queue[torrent.Peer]{}
-	for {
-	
-	}
-}
 
-func (trackerService *TrackerService) FetchPeers(torrentMetainfo *torrent.TorrentMetainfo) (TrackerResponse, error) {
-	trackerRequestUrl, err := torrentMetainfo.BuildTrackerRequest()
-	if err != nil {
-		return TrackerResponse{}, err
-	}
-
-	resp, err := http.Get(trackerRequestUrl)
-	if err != nil {
-		return TrackerResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	//We Read the response body on the line below.
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return TrackerResponse{}, nil
-	}
-	//Convert the body to type string
-	sb := string(body)
-
-	trackerResponse := TrackerResponse{}
-
-	fmt.Printf(sb)
-	return trackerResponse, nil
-}
 
 func parseTrackerScrapeResponse(response string, infoHash string) TrackerScrapeResponse {
 	reader := bufio.NewReaderSize(strings.NewReader(response), len(response))

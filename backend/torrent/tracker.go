@@ -1,28 +1,31 @@
 package torrent
 
 import (
+	"bittorrent/backend/utils"
+	"bittorrent/backend/collections"
+	"bufio"
+	"encoding/binary"
 	"errors"
-	"math/rand/v2"
+	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
+	"strconv"
 )
 
 const AZ_CLIENT_PREFIX string = "-GB0001-"
 
-type TrackerResponse struct {
-	interval int64
-	peers string
+type TorrentState struct {
+	Downloaded int64
+	Left int64
+	Uploaded int64
+	PeerId string
+	Event string
 }
 
-func generatePeerId() string {
-	random := ""
-	for i := 0; i < 12; i++ {
-		random += string(rand.IntN(10))
-	}
-	return AZ_CLIENT_PREFIX + random
-}
-
-func (torrentMetainfo *TorrentMetainfo) BuildTrackerRequest() (string, error) {
+func (torrentMetainfo *TorrentMetainfo) buildTrackerRequest(torrentState *TorrentState) (string, error) {
 	trackerRequest, err := url.Parse(torrentMetainfo.Announce)
 	if err != nil {
 		return "", err
@@ -30,22 +33,190 @@ func (torrentMetainfo *TorrentMetainfo) BuildTrackerRequest() (string, error) {
 
 	urlParams := url.Values{
 		"info_hash": []string{string(torrentMetainfo.InfoHash[:])},
-		"peer_id": []string{generatePeerId()},
+		"peer_id": []string{string(torrentState.PeerId)},
 		"port": []string{"6888"},
-		"uploaded": []string{"0"},
-		"downloaded": []string{"0"},
-		"left": []string{string(torrentMetainfo.Size)},
+		"uploaded": []string{strconv.FormatInt(torrentState.Uploaded, 10)},
+		"downloaded": []string{strconv.FormatInt(torrentState.Downloaded, 10)},
+		"left": []string{strconv.FormatInt(torrentMetainfo.Size, 10)},
 		"compact": []string{"1"},
-		"event": []string{"started"},
+	}
+
+	if torrentState.Event != "" {
+		urlParams.Add("event", torrentState.Event)
 	}
 
 	trackerRequest.RawQuery = urlParams.Encode()
 	return trackerRequest.String(), nil
 }
 
-func (torrentMetainfo *TorrentMetainfo) FetchPeers() ([]Peer, error) {
+func parseDictionaryModelPeers(peers []map[string]any) ([]Peer, error) {
+	var peerList []Peer
+	for _, peerValue := range peers {
+		peerIdValue, ok := peerValue["peer id"]
+		if !ok {
+			return peerList, errors.New("peer id missing from TrackerResponse")
+		}
+		peerId, ok := peerIdValue.(string)
+		if !ok {
+			return peerList, errors.New("peer id key in TrackerResponse was not a string")
+		}
+		
+		ipValue, ok := peerValue["ip"]
+		if !ok {
+			return peerList, errors.New("ip missing from TrackerResponse")
+		}
+		ip, ok := ipValue.(string)
+		if !ok {
+			return peerList, errors.New("ip key in TrackerResponse was not a string")
+		}
+
+		portValue, ok := peerValue["ip"]
+		if !ok {
+			return peerList, errors.New("port missing from TrackerResponse")
+		}
+		port, ok := portValue.(int64)
+		if !ok {
+			return peerList, errors.New("port key in TrackerResponse was not an int")
+		}
+
+		peer := Peer {PeerId: peerId, IpAddress: ip, Port: uint(port)}
+		peerList = append(peerList, peer)
+	}
+
+	return peerList, nil
+}
+
+func parseBinaryModelPeers(peers string) ([]Peer, error) {
+	byteArr := []byte(peers)
+	var peerList []Peer
+	if len(byteArr) < 6 {
+		return []Peer{}, errors.New("Binary model peers has unexpected format")
+	}
+	for len(byteArr) >= 6 {
+		peer := byteArr[:6]
+		ipAddress := byteArr[:4]
+		portArr := peer[4:]
+		port := uint(binary.BigEndian.Uint16(portArr))
+		peerList = append(peerList, Peer{ IpAddress: string(ipAddress), Port: port} )
+		byteArr = byteArr[6:]
 	
-	return nil, nil
+	}
+	return peerList, nil
+}
+
+func parseTrackerResponse(dictionary map[string]any) (int, []Peer, error) {
+	peers, ok := dictionary["peers"]
+	if !ok {
+		return 0, []Peer{}, errors.New("No peers key found in tracker response.") 
+	}
+
+	var peerList []Peer
+	if peersDict, ok := peers.([]map[string]any); !ok {
+		if peersStr, ok := peers.(string); !ok {	
+			return 0, []Peer{}, errors.New("peers value in tracker response was not in expected binary or dictionary model.") 
+		} else {
+			var err error
+			peerList, err = parseBinaryModelPeers(peersStr)
+			if err != nil {
+				return 0, []Peer{}, err	
+			}
+		}
+	} else {
+		var err error
+		peerList, err = parseDictionaryModelPeers(peersDict)
+		if err != nil {
+			return 0, []Peer{}, err	
+		}
+	}
+
+	intervalAny, ok := dictionary["interval"]
+	if !ok {
+		return 0, []Peer{}, errors.New("No interval key found in tracker response.")  
+	}
+
+	interval, ok :=  intervalAny.(int); 
+	if !ok {
+		return 0, []Peer{}, errors.New("interval value in tracker response is not of type int")
+	}
+
+	return interval, peerList, nil
+}
+
+func (torrentMetainfo *TorrentMetainfo) fetchPeers(ch chan []Peer, torrentStateCh chan TorrentState) (error) {
+	for {
+		torrentState := <-torrentStateCh
+
+		trackerRequestUrl, err := torrentMetainfo.buildTrackerRequest(&torrentState)
+		if err != nil {
+			return err
+		}
+
+		resp, err := http.Get(trackerRequestUrl)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+			
+		if resp.StatusCode != 200 {
+			errorString := fmt.Sprintf("Tracker request returned non-OK response. StatusCode=%d", resp.StatusCode)
+			return errors.New(errorString)
+		}
+		//We Read the response body on the line below.
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err 
+		}
+		//Convert the body to type string
+		sb := string(body)
+		reader := bufio.NewReader(strings.NewReader(sb))
+		decoded, err :=	utils.Decode(reader)
+		if err != nil {
+			return err
+		}
+
+		dictionary, ok := decoded.(map[string]any)
+		if !ok { 
+			return errors.New("TrackerResponse is invalid.")
+		}
+
+		interval, peersList, err := parseTrackerResponse(dictionary)
+		if err != nil {
+			return err	
+		}
+
+		ch <- peersList 	
+		time.Sleep(time.Duration(interval))
+	}
+}
+
+func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
+	peerQueue := collections.Queue[Peer]{}
+	peerCh := make(chan []Peer)
+	torrentStateCh := make(chan TorrentState)
+	torrentState := TorrentState{
+		Event: "started", 
+		Downloaded: 0, 
+		Left: torrentMetainfo.Size, 
+		Uploaded: 0, 
+		PeerId: GeneratePeerId(),
+	}
+	torrentStateCh <- torrentState
+	go torrentMetainfo.fetchPeers(peerCh, torrentStateCh)
+	for torrentState.Downloaded != torrentMetainfo.Size {
+		peerList := <- peerCh	
+		peerQueue.PushSlice(peerList)
+		if peerQueue.IsEmpty() {
+			continue	
+		}
+		peer, err := peerQueue.Pop()
+		if err != nil {
+		
+		}
+		go torrentMetainfo.downloadPiece(peer)
+	}
+}
+
+func (torrentMetainfo *TorrentMetainfo) downloadPiece(peer Peer) {
 }
 
 func (torrentMetainfo *TorrentMetainfo) BuildScrapeRequest() (string, error) {
