@@ -1,21 +1,23 @@
 package torrent
 
 import (
-	"bittorrent/backend/utils"
 	"bittorrent/backend/collections"
+	"bittorrent/backend/utils"
 	"bufio"
+	"container/list"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 )
 
 const AZ_CLIENT_PREFIX string = "-GB0001-"
+const PIECE_HASH_LEN = 20
 
 type TorrentState struct {
 	Downloaded int64
@@ -23,6 +25,7 @@ type TorrentState struct {
 	Uploaded int64
 	PeerId string
 	Event string
+	DownloadedPieces []int
 }
 
 func (torrentMetainfo *TorrentMetainfo) buildTrackerRequest(torrentState *TorrentState) (string, error) {
@@ -142,7 +145,7 @@ func parseTrackerResponse(dictionary map[string]any) (int, []Peer, error) {
 	return interval, peerList, nil
 }
 
-func (torrentMetainfo *TorrentMetainfo) fetchPeers(ch chan []Peer, torrentStateCh chan TorrentState) (error) {
+func (torrentMetainfo *TorrentMetainfo) fetchPeers(peerCh chan []Peer, torrentStateCh chan TorrentState) (error) {	
 	for {
 		torrentState := <-torrentStateCh
 
@@ -184,7 +187,7 @@ func (torrentMetainfo *TorrentMetainfo) fetchPeers(ch chan []Peer, torrentStateC
 			return err	
 		}
 
-		ch <- peersList 	
+		peerCh <- peersList 	
 		time.Sleep(time.Duration(interval))
 	}
 }
@@ -193,6 +196,8 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 	peerQueue := collections.Queue[Peer]{}
 	peerCh := make(chan []Peer)
 	torrentStateCh := make(chan TorrentState)
+	defer close(peerCh)
+	defer close(torrentStateCh)
 	torrentState := TorrentState{
 		Event: "started", 
 		Downloaded: 0, 
@@ -201,22 +206,57 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 		PeerId: GeneratePeerId(),
 	}
 	torrentStateCh <- torrentState
+
 	go torrentMetainfo.fetchPeers(peerCh, torrentStateCh)
-	for torrentState.Downloaded != torrentMetainfo.Size {
-		peerList := <- peerCh	
-		peerQueue.PushSlice(peerList)
+	go func() {
+		for peerList := range peerCh {
+			for _, peer := range peerList {
+				go func() {
+					err := peer.Connect(torrentMetainfo.InfoHash)
+					if err != nil {
+						fmt.Printf("Failed to connect to peer: %s", peer.String())
+					}
+					peerQueue.Push(peer)
+				}()
+			}
+		}
+	}()
+	
+	pieceList := torrentMetainfo.generatePieceList()
+	for pieceList.Len() > 0 {
 		if peerQueue.IsEmpty() {
+			fmt.Println("No peers available")
 			continue	
 		}
-		peer, err := peerQueue.Pop()
-		if err != nil {
-		
+
+		peer, _ := peerQueue.Pop()
+		if !peer.IsActive {
+			fmt.Printf("Removed flaky peer from queue: %s", peer.String())
+			continue	
 		}
-		go torrentMetainfo.downloadPiece(peer)
+
+		pieceHash := peer.GetFirstAvailablePiece(pieceList)
+		pieceList.Remove(pieceHash)
+
+		go func() {
+			torrentMetainfo.downloadPiece(peer)
+			peerQueue.Push(peer)
+		}()
 	}
 }
 
+func (torrentMetainfo *TorrentMetainfo) generatePieceList() *list.List {
+	list := list.New()
+
+	for startIndex:= 0; startIndex < len(torrentMetainfo.Info.Pieces); startIndex += PIECE_HASH_LEN { 
+		list.PushFront(torrentMetainfo.Info.Pieces[startIndex: startIndex + PIECE_HASH_LEN])
+	}
+
+	return list
+}
+
 func (torrentMetainfo *TorrentMetainfo) downloadPiece(peer Peer) {
+		
 }
 
 func (torrentMetainfo *TorrentMetainfo) BuildScrapeRequest() (string, error) {

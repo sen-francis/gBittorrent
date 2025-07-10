@@ -19,7 +19,7 @@ type FileInfo struct {
 
 type TorrentInfo struct {
 	PieceLength int64
-	Pieces string
+	Pieces []byte
 	IsPrivate bool
 	DirectoryName string
 	FileInfoList []FileInfo
@@ -145,7 +145,7 @@ func parseMultiFileInfoDictionary(dictionary map[string]any) (TorrentInfo, error
 	}
 
 	torrentInfo.PieceLength = dictionary["piece length"].(int64)
-	torrentInfo.Pieces = dictionary["pieces"].(string)
+	torrentInfo.Pieces = dictionary["pieces"].([]byte)
 	torrentInfo.DirectoryName = dictionary["name"].(string)
 
 	var fileInfoList []FileInfo
@@ -179,7 +179,7 @@ func parseSingleFileInfoDictionary(dictionary map[string]any) (TorrentInfo, erro
 		return torrentInfo, errors.New("Torrent Metainfo info dictionary formatted incorrectly")
 	}
 	torrentInfo.PieceLength = dictionary["piece length"].(int64)
-	torrentInfo.Pieces = dictionary["pieces"].(string)	
+	torrentInfo.Pieces = dictionary["pieces"].([]byte)	
 	fileInfo := FileInfo { Length: dictionary["length"].(int64), Path: []string{dictionary["name"].(string)} }	
 
 	if md5sum, ok := dictionary["md5sum"]; ok {
