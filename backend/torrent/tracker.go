@@ -1,10 +1,8 @@
 package torrent
 
 import (
-	"bittorrent/backend/collections"
 	"bittorrent/backend/utils"
 	"bufio"
-	"container/list"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,7 +15,6 @@ import (
 )
 
 const AZ_CLIENT_PREFIX string = "-GB0001-"
-const PIECE_HASH_LEN = 20
 
 type TorrentState struct {
 	Downloaded int64
@@ -192,72 +189,6 @@ func (torrentMetainfo *TorrentMetainfo) fetchPeers(peerCh chan []Peer, torrentSt
 	}
 }
 
-func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
-	peerQueue := collections.Queue[Peer]{}
-	peerCh := make(chan []Peer)
-	torrentStateCh := make(chan TorrentState)
-	defer close(peerCh)
-	defer close(torrentStateCh)
-	torrentState := TorrentState{
-		Event: "started", 
-		Downloaded: 0, 
-		Left: torrentMetainfo.Size, 
-		Uploaded: 0, 
-		PeerId: GeneratePeerId(),
-	}
-	torrentStateCh <- torrentState
-
-	go torrentMetainfo.fetchPeers(peerCh, torrentStateCh)
-	go func() {
-		for peerList := range peerCh {
-			for _, peer := range peerList {
-				go func() {
-					err := peer.Connect(torrentMetainfo.InfoHash)
-					if err != nil {
-						fmt.Printf("Failed to connect to peer: %s", peer.String())
-					}
-					peerQueue.Push(peer)
-				}()
-			}
-		}
-	}()
-	
-	pieceList := torrentMetainfo.generatePieceList()
-	for pieceList.Len() > 0 {
-		if peerQueue.IsEmpty() {
-			fmt.Println("No peers available")
-			continue	
-		}
-
-		peer, _ := peerQueue.Pop()
-		if !peer.IsActive {
-			fmt.Printf("Removed flaky peer from queue: %s", peer.String())
-			continue	
-		}
-
-		pieceHash := peer.GetFirstAvailablePiece(pieceList)
-		pieceList.Remove(pieceHash)
-
-		go func() {
-			torrentMetainfo.downloadPiece(peer)
-			peerQueue.Push(peer)
-		}()
-	}
-}
-
-func (torrentMetainfo *TorrentMetainfo) generatePieceList() *list.List {
-	list := list.New()
-
-	for startIndex:= 0; startIndex < len(torrentMetainfo.Info.Pieces); startIndex += PIECE_HASH_LEN { 
-		list.PushFront(torrentMetainfo.Info.Pieces[startIndex: startIndex + PIECE_HASH_LEN])
-	}
-
-	return list
-}
-
-func (torrentMetainfo *TorrentMetainfo) downloadPiece(peer Peer) {
-		
-}
 
 func (torrentMetainfo *TorrentMetainfo) BuildScrapeRequest() (string, error) {
 	splitAnnounce := strings.Split(torrentMetainfo.Announce,"/")

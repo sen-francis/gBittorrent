@@ -2,7 +2,6 @@ package torrent
 
 import (
 	"bytes"
-	"container/list"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -48,6 +47,8 @@ func (peer *Peer) Connect(infoHash [20]byte) (error) {
 	if err != nil {
 		return err
 	}
+
+	// todo sen: send interested + wait for unchoke
 
 	return nil
 }
@@ -111,7 +112,7 @@ func (peer *Peer) receiveBitfield() (error) {
 
 
 func (peer *Peer) handleConnectionFailure(failureReason string) error {
-	errorMessage := fmt.Sprintf("%s. Peer: %s", failureReason, peer.String())
+	errorMessage := fmt.Sprintf("%s Peer: %s", failureReason, peer.String())
 	peer.conn.Close()
 	peer.IsActive = false
 	return errors.New(errorMessage)
@@ -142,16 +143,28 @@ func (peer *Peer) validateHandshake(handshake []byte, infoHash [20]byte) bool {
 	return true
 }
 
-func (peer *Peer) GetFirstAvailablePiece(pieceList *list.List) []byte {
-	for e := pieceList.Front(); e != nil; e = e.Next() {
-		piece, _ := e.Value.([]byte)	
-		if peer.hasPiece(piece) {
-			return piece
+func (peer *Peer) GetFirstAvailablePieceIndex(pieceMap map[int][]byte) (int, error) {
+	for pieceIndex := range pieceMap {
+		if peer.hasPiece(pieceIndex) {
+			return pieceIndex, nil
 		}
-	}
-	return make([]byte, 1)
+	}	
+	return -1, peer.handleConnectionFailure("Peer has no required pieces.")
 }
 
-func (peer *Peer) hasPiece(piece []byte) bool {
-	return false
+func (peer *Peer) hasPiece(index int) bool {
+	byteIndex := index / 8
+	offset := index % 8
+	if byteIndex >= len(peer.bitfield) {
+		return false	
+	}
+	return ((peer.bitfield[byteIndex] >> offset) & 1) != 0
+}
+
+func (peer *Peer) recieveMessage() error {
+	msg, err := peer.readWithDeadline()	
+	if err != nil {
+		return err	
+	}
+	
 }
