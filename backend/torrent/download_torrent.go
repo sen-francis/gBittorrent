@@ -2,6 +2,8 @@ package torrent
 
 import (
 	"bittorrent/backend/collections"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 )
@@ -60,12 +62,16 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 		piece := pieceMap[pieceIndex]
 		delete(pieceMap, pieceIndex)
 		go func() {
-			err := torrentMetainfo.downloadPiece(peer, pieceIndex)
-			// todo sen: verify piece with piece hash
+			err := peer.downloadPiece(torrentMetainfo.Info.PieceLength, pieceIndex)
 			mutex.Lock()
 			if err != nil {
 				pieceMap[pieceIndex] = piece
 			}
+			if errors.Is(err, CHOKE_ERR) {
+				fmt.Printf("Choked by peer: %s\n", peer.String())			
+				// todo sen wait for unchoke
+			}
+			// todo sen: verify piece with piece hash
 			peerQueue.Push(peer)
 			mutex.Unlock()
 		}()
@@ -94,19 +100,57 @@ type PieceState struct {
 const MAX_REQUESTS = 5
 const BLOCK_SIZE = 16384
 
-func (torrentMetainfo *TorrentMetainfo) downloadPiece(peer Peer, pieceIndex int) error {
+var CHOKE_ERR = errors.New("Choked by peer") 
+
+func (peer *Peer) waitForUnchoke() error {
+	rawMessage, err := peer.readWithDeadline() // todo wait longer than 2 mins for unchoke
+	// can we recieve anything other than unchoke while choked?
+}
+
+func (peer *Peer) downloadPiece(pieceLength int64, pieceIndex int) error {
 	pieceState := PieceState{
 		blockOffset: 0,	
 		currentRequests: 0,
-		downloadedBlocks: make([]bool, torrentMetainfo.Info.PieceLength / BLOCK_SIZE),
+		downloadedBlocks: make([]bool, pieceLength / BLOCK_SIZE),
 	}
 
 	for pieceState.currentRequests < MAX_REQUESTS {
 		// send request
 	}
 	for pieceState.currentRequests > 0 {
-		// wait for messages
-		// if message recieved, queue another reuqets
+		rawMessage, err := peer.readWithDeadline()	
+		if err != nil {
+			return err	
+		}
+		message := parseMessage(rawMessage)
+		switch message.messageType {
+		case KEEP_ALIVE: 
+			continue
+		case CHOKE:
+			return CHOKE_ERR
+		case UNCHOKE:
+			return nil	
+		case INTERESTED:
+		// TODO SEEDING
+		case NOT_INTERESTED: 
+		// TODO SEEDING
+		case HAVE:
+			index := int(binary.BigEndian.Uint16(message.payload))
+			peer.updateBitfield(index)
+		case BITFIELD:
+			peer.bitfield = message.payload
+		case REQUEST:
+		// TODO SEEDING
+		case PIECE:
+			index := int(binary.BigEndian.Uint16(message.payload[:4]))
+			offset := int(binary.BigEndian.Uint16(message.payload[4:8]))
+			block := message.payload[8:]
+			return PIECE, nil
+		case CANCEL:
+		// TODO SEEDING
+		case PORT: 
+		// TODO DHT
+		}
 	}
 	return nil
 }

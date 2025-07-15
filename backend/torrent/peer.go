@@ -2,6 +2,7 @@ package torrent
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -161,10 +162,15 @@ func (peer *Peer) hasPiece(index int) bool {
 	return ((peer.bitfield[byteIndex] >> offset) & 1) != 0
 }
 
-func (peer *Peer) recieveMessage() error {
-	msg, err := peer.readWithDeadline()	
-	if err != nil {
-		return err	
+func (peer *Peer) updateBitfield(index int) error {
+	byteIndex := index / 8
+	offset := index % 8
+	if byteIndex >= len(peer.bitfield) {
+		errorMsg := fmt.Sprintf("Peer sent invalid have message: %s", peer.String())
+		return errors.New(errorMsg)	
 	}
-	
+	peer.bitfield[byteIndex] |= 1 << offset
+	return nil
 }
+
+
