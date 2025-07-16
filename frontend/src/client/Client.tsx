@@ -1,5 +1,5 @@
 import './Client.css';
-import {useState} from 'react';
+import {useEffect, useState, useRef} from 'react';
 import {SelectFile} from '../../wailsjs/go/services/FileUploadService'
 import {services, torrent} from '../../wailsjs/go/models'
 import {ScrapeTracker} from '../../wailsjs/go/services/TrackerService'
@@ -64,18 +64,34 @@ const TorrentFileInformation = (props: {torrentInfo: torrent.TorrentInfo}) => {
 }
 
 interface AddTorentModalProps {
-	torrentData: services.FileUploadResponse;
-	scrapeTrackerData: services.TrackerScrapeResponse;
+	torrentData: services.FileUploadResponse | undefined;
+	scrapeTrackerData: services.TrackerScrapeResponse | undefined;
 	onClose: () => void;
+	isModalOpen: boolean;
 }
 
 const AddTorrentModal = (props: AddTorentModalProps) => {
-	const {torrentData, scrapeTrackerData, onClose} = props;
+	const {torrentData, scrapeTrackerData, onClose, isModalOpen} = props;
+	const modalRef = useRef<HTMLDialogElement>(null);
+	useEffect(() => {
+		if (!modalRef.current) {
+			return;	
+		}
+		if (isModalOpen) {
+			modalRef.current.showModal();	
+		}
+		else {
+			modalRef.current.close();
+			onClose();
+		}
+	}, [isModalOpen]);
 
-	return <dialog open>
+	return <dialog ref={modalRef}>
 		<div className='add-torrent-modal__body'>
-			<TorrentInformation torrentMetainfo={torrentData.TorrentMetainfo} scrapeTrackerData={scrapeTrackerData} />
-			<TorrentFileInformation torrentInfo={torrentData.TorrentMetainfo.Info}/>
+			{torrentData != null && scrapeTrackerData != null && <>
+				<TorrentInformation torrentMetainfo={torrentData.TorrentMetainfo} scrapeTrackerData={scrapeTrackerData} />
+				<TorrentFileInformation torrentInfo={torrentData.TorrentMetainfo.Info}/>
+			</>}
 		</div>
 		<div>
 			<button>Download</button>
@@ -106,17 +122,17 @@ const Menu = () => {
 	}
 
 	const onModalClose = () => {
-		setScrapeTrackerData(undefined);
-		setTorrentData(undefined);
+		setScrapeTrackerData({} as services.TrackerScrapeResponse);
+		setTorrentData({} as services.FileUploadResponse);
 		setIsModalOpen(false);
 	}
 
-	const shouldShowModal = isModalOpen && torrentData != null && scrapeTrackerData != null;
+	const shouldShowModal = isModalOpen && torrentData != {} as services.FileUploadResponse && scrapeTrackerData != {} as services.TrackerScrapeResponse;
 
 	return <div>
 		<button onClick={() => addTorrent()}>Add</button>
 		<button>Remove</button>
-		{shouldShowModal && <AddTorrentModal torrentData={torrentData} scrapeTrackerData={scrapeTrackerData} onClose={onModalClose} />}
+		<AddTorrentModal torrentData={torrentData} scrapeTrackerData={scrapeTrackerData} onClose={onModalClose} isModalOpen={shouldShowModal} />
 	</div>
 }
 
