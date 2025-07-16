@@ -71,7 +71,7 @@ func (peer *Peer) handshake(infoHash [20]byte) error {
 		return peer.handleConnectionFailure(err.Error())	
 	}
 	
-	peerHandshake, err := peer.readWithDeadline()	
+	peerHandshake, err := peer.read()	
 	if err != nil {
 		return peer.handleConnectionFailure(err.Error())	
 	}
@@ -84,9 +84,13 @@ func (peer *Peer) handshake(infoHash [20]byte) error {
 	return nil
 }
 
-func (peer *Peer) readWithDeadline() ([]byte, error) {
-	waitTime := time.Now().Add(2 * time.Minute)
-	err := peer.conn.SetReadDeadline(waitTime)
+func (peer *Peer) read() ([]byte, error) {
+	deadline := time.Now().Add(2 * time.Minute)
+	return peer.readWithDeadline(deadline)
+}
+
+func (peer *Peer) readWithDeadline(deadline time.Time) ([]byte, error) {
+	err := peer.conn.SetReadDeadline(deadline)
 	if err != nil {
 		return nil, err 
 	}
@@ -101,7 +105,7 @@ func (peer *Peer) readWithDeadline() ([]byte, error) {
 }
 
 func (peer *Peer) receiveBitfield() (error) {
-	bitfield, err := peer.readWithDeadline()
+	bitfield, err := peer.read()
 	if err != nil {
 		return peer.handleConnectionFailure(err.Error())	
 	}
@@ -110,11 +114,14 @@ func (peer *Peer) receiveBitfield() (error) {
 	return nil
 }
 
+func (peer *Peer) closeConnection() {
+	peer.conn.Close()
+	peer.IsActive = false
+}
 
 func (peer *Peer) handleConnectionFailure(failureReason string) error {
 	errorMessage := fmt.Sprintf("%s Peer: %s", failureReason, peer.String())
-	peer.conn.Close()
-	peer.IsActive = false
+	peer.closeConnection()
 	return errors.New(errorMessage)
 }
 
