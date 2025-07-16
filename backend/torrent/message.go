@@ -2,6 +2,7 @@ package torrent
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 type MessageType int
@@ -44,4 +45,36 @@ func parseMessage(rawMessage []byte) Message {
 		messageType: MessageType(messageId),
 		payload: payload,
 	}
+}
+
+func (message *Message) messageTypeToString() string {
+	switch message.messageType {
+	case KEEP_ALIVE:
+		return fmt.Sprint("KEEP_ALIVE")
+	case CHOKE:
+		return fmt.Sprint("CHOKE")
+	case UNCHOKE:
+		return fmt.Sprint("UNCHOKE")
+	case INTERESTED:
+		return fmt.Sprint("INTERESTED")
+	case NOT_INTERESTED:
+		return fmt.Sprint("NOT_INTERESTED")
+	case HAVE:
+		return fmt.Sprint("HAVE")
+	case BITFIELD:
+		return fmt.Sprint("BITFIELD")
+	case REQUEST:
+		return fmt.Sprint("REQUEST")
+	case PIECE:
+		return fmt.Sprint("PIECE")
+	case CANCEL:
+		return fmt.Sprint("CANCEL")
+	case PORT:
+		return fmt.Sprint("PORT")
+	}
+	return ""
+}
+
+func (message *Message) String() string {
+	return fmt.Sprintf("Message Type: %s, Message Payload: %s\n", message.messageTypeToString(), string(message.payload))
 }

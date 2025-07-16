@@ -84,7 +84,7 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 				}
 			}
 			if err != nil {
-				fmt.Printf("Discarding peer: %s, %s\n", peer.String())
+				fmt.Printf("Discarding peer: %s\n", peer.String())
 				peer.closeConnection()
 				return
 			}
@@ -95,9 +95,9 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 				mutex.Unlock()
 				return
 			}
-			err = torrentMetainfo.writePieceToFiles(pieceIndex, downloadedPiece)
+			err = torrentMetainfo.writePieceToFiles(int64(pieceIndex), downloadedPiece)
 			if err != nil {	
-				fmt.Printf("Failed to write to file: \n", err.Error())
+				fmt.Printf("Failed to write to file: %s\n", err.Error())
 			}
 			peerQueue.Push(peer)
 			mutex.Unlock()
@@ -175,7 +175,7 @@ func (peer *Peer) waitForUnchoke() error {
 	}
 	message := parseMessage(rawMessage)
 	if message.messageType != UNCHOKE {
-		errorMsg := fmt.Sprintf("Recieve unknown message from peer while waiting for unchoke:%s, %s\n", message, peer.String())
+		errorMsg := fmt.Sprintf("Recieve unknown message from peer while waiting for unchoke:%s, %s\n", message.String(), peer.String())
 		return errors.New(errorMsg)
 	}
 	
