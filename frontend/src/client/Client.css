@@ -14,3 +14,16 @@
 	flex-direction: column;
 	align-items: start;
 }
+
+dialog[open]:modal {
+  padding: 8rem;
+  border: 1px solid black;
+  border-radius: 2rem;
+  gap: 3rem;
+  background: orange;
+  overflow: hidden;
+}
+
+::backdrop {
+  background: hsl(0 0% 10% / 0.5);
+}
