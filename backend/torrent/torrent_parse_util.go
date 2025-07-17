@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"errors"
+	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 )
 
@@ -50,9 +52,9 @@ func isFileListValid(fileList []map[string]any) bool {
 		} else {
 			return false
 		}
-
 		if path, ok := file["path"]; ok {
-			if _, ok := path.([]string); !ok {
+			_, err := castFilePathList(path)
+			if err != nil {
 				return false
 			}
 		} else {
@@ -63,7 +65,34 @@ func isFileListValid(fileList []map[string]any) bool {
 	return true
 }
 
+func castFilePathList(a any) ([]string, error) {
+    v := reflect.ValueOf(a)
+    switch v.Kind() {
+    case reflect.Slice, reflect.Array:
+        result := make([]string, v.Len())
+        for i := range v.Len() {
+			if val, ok := v.Index(i).Interface().(string); ok {
+				result[i] = val
+			} else {
+				errorMsg := fmt.Sprintf("Unknown value in file path list: %s\n", reflect.ValueOf(val).Kind().String())
+				return nil, errors.New(errorMsg) 
+			}
+		}
+        return result, nil
+    default:
+		errorMsg := fmt.Sprintf("Provided value was not a slice: %s\n", v.Kind().String())
+   		return nil, errors.New(errorMsg) 
+	}
+}
+
 func isMultiFileInfoDictionaryValid(dictionary map[string]any) bool {
+	// some torrents may wrap the info dictionary contents in a collections dictionary	
+	if _, ok := dictionary["collections"]; ok {
+		// if infoDict, ok := collections.(map[string]any); ok {
+		// 	dictionary = infoDict
+		// }
+	}
+
 	if pieceLength, ok := dictionary["piece length"]; ok {
 		if _, ok := pieceLength.(int64); !ok {
 			return false
@@ -88,11 +117,13 @@ func isMultiFileInfoDictionaryValid(dictionary map[string]any) bool {
 		return false
 	}
 
-	if length, ok := dictionary["files"]; ok {
-		if fileList, ok := length.([]map[string]any); !ok {
-			return false
-		} else {
-			isFileListValid(fileList)	
+	if files, ok := dictionary["files"]; ok {
+		fileList, err := castFileList(files)
+		if err != nil {
+			return false	
+		}
+		if !isFileListValid(fileList) {
+			return false	
 		}
 	} else {
 		return false
@@ -101,6 +132,26 @@ func isMultiFileInfoDictionaryValid(dictionary map[string]any) bool {
 	return true
 }
 
+
+func castFileList(a any) ([]map[string]any, error) {
+    v := reflect.ValueOf(a)
+    switch v.Kind() {
+    case reflect.Slice, reflect.Array:
+        result := make([]map[string]any, v.Len())
+        for i := range v.Len() {
+			if val, ok := v.Index(i).Interface().(map[string]any); ok {
+				result[i] = val
+			} else {
+				errorMsg := fmt.Sprintf("Unknown value in file list: %s\n", reflect.ValueOf(val).Kind().String())
+				return nil, errors.New(errorMsg) 
+			}
+		}
+        return result, nil
+    default:
+		errorMsg := fmt.Sprintf("Provided value was not a slice: %s\n", v.Kind().String())
+   		return nil, errors.New(errorMsg) 
+	}
+}
 
 func isSingleFileInfoDictionaryValid(dictionary map[string]any) bool {
 	if pieceLength, ok := dictionary["piece length"]; ok {
@@ -149,9 +200,10 @@ func parseMultiFileInfoDictionary(dictionary map[string]any) (TorrentInfo, error
 	torrentInfo.DirectoryName = dictionary["name"].(string)
 
 	var fileInfoList []FileInfo
-	files := dictionary["files"].([]map[string]any)
+	files, _ := castFileList(dictionary["files"])
 	for _, file := range files {
-		fileInfo := FileInfo { Length: file["length"].(int64), Path: file["path"].([]string) }	
+		filePath, _ := castFilePathList(file["path"])
+		fileInfo := FileInfo { Length: file["length"].(int64), Path: filePath }
 
 		if md5sum, ok := file["md5sum"]; ok {
 			if md5sum, ok := md5sum.(string); ok {

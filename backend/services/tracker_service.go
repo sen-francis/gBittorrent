@@ -122,7 +122,9 @@ func parseTrackerScrapeResponse(response string, infoHash string) TrackerScrapeR
 		return TrackerScrapeResponse{Err: errors.New("Torrent scrape response invalid")}
 	}
 	trackerScrapeResponse.Downloaded = int32(downloaded)
-	trackerScrapeResponse.Name = torrentData["name"].(string)
+	if torrentData["name"] != nil {
+		trackerScrapeResponse.Name = torrentData["name"].(string)
+	}
 
 	return trackerScrapeResponse 
 }
@@ -151,6 +153,5 @@ func (trackerService *TrackerService) ScrapeTracker(torrentMetainfo *torrent.Tor
 
 	trackerScrapeResponse := parseTrackerScrapeResponse(sb, string(torrentMetainfo.InfoHash[:]))
 
-	fmt.Printf(sb)
 	return trackerScrapeResponse
 }

@@ -3,6 +3,7 @@ package services
 import (
 	"bittorrent/backend/torrent"
 	"context"
+	"fmt"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -40,7 +41,8 @@ func (fileUploadService *FileUploadService) SelectFile() FileUploadResponse {
 		},	
 	})
 
-	if (err != nil) {	
+	if (err != nil) {
+		fmt.Printf("Error occured while uploading file: %s\n", err.Error())
 		return FileUploadResponse{ 
 			TorrentMetainfo: torrent.TorrentMetainfo{}, 
 			Err: err,
