@@ -28,3 +28,9 @@ go.work.sum
 build/bin
 node_modules
 frontend/dist
+
+# test ouput
+test-output
+
+# output 
+output

@@ -5,7 +5,6 @@ import (
 	"bittorrent/backend/utils"
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"

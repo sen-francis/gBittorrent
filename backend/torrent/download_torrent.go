@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -95,7 +95,9 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 				mutex.Unlock()
 				return
 			}
-			err = torrentMetainfo.writePieceToFiles(int64(pieceIndex), downloadedPiece)
+			pwd, _ := os.Getwd()
+			outputPath := filepath.Join(pwd, "..", "..", "output")
+			err = torrentMetainfo.writePieceToFiles(int64(pieceIndex), downloadedPiece, outputPath)
 			if err != nil {	
 				fmt.Printf("Failed to write to file: %s\n", err.Error())
 			}
@@ -105,31 +107,39 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 	}
 }
 
-func (torrentMetainfo *TorrentMetainfo) writePieceToFiles(pieceIndex int64, piece []byte) error {
+
+func (torrentMetainfo *TorrentMetainfo) writePieceToFiles(pieceIndex int64, piece []byte, outputPath string) error {
 	fileStartIndex := int64(0)
 	pieceStartIndex := torrentMetainfo.Info.PieceLength * pieceIndex
 	for _, fileInfo := range torrentMetainfo.Info.FileInfoList {
 		fileEndIndex := fileStartIndex + fileInfo.Length
-		if pieceStartIndex + torrentMetainfo.Info.PieceLength < fileEndIndex {
+		if pieceStartIndex + int64(len(piece)) < fileEndIndex {
 			// piece in one file
-			file, err := os.OpenFile(strings.Join(fileInfo.Path, "/"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) 
+			filePathArr := append([]string{outputPath}, fileInfo.Path...)
+			filePath := filepath.Join(filePathArr...)
+			file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644) 
 			if err != nil {
 				return err	
 			}
-			_, err = file.WriteAt(piece, pieceStartIndex - fileStartIndex)
+			n, err := file.WriteAt(piece, pieceStartIndex - fileStartIndex)
+			fmt.Print(n)
+			file.Close()
 			return err
 		} else if pieceStartIndex < fileEndIndex {
 			// piece spanning multiple files	
-			file, err := os.OpenFile(strings.Join(fileInfo.Path, "/"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644) 
+			filePathArr := append([]string{outputPath}, fileInfo.Path...)
+			filePath := filepath.Join(filePathArr...)
+			file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0644) 
 			if err != nil {
 				return err	
 			}
 			_, err = file.WriteAt(piece[:fileEndIndex - pieceStartIndex], pieceStartIndex - fileStartIndex)
+			file.Close()
 			if err != nil {
 				return err	
 			}
-			pieceStartIndex = fileEndIndex
 			piece = piece[fileEndIndex - pieceStartIndex :]
+			pieceStartIndex = fileEndIndex
 		}
 		
 		fileStartIndex += fileInfo.Length
@@ -247,13 +257,19 @@ func (peer *Peer) downloadPiece(pieceLength int64, pieceIndex int) ([]byte, erro
 }
 
 const REQUEST_LEN = 13
-func (peer *Peer) requestBlock(pieceIndex int, blockOffset int) error {
+
+func (peer *Peer) generateRequest(pieceIndex int, blockOffset int) []byte {
 	request := make([]byte, 17)
 	binary.BigEndian.PutUint32(request[0:4], uint32(REQUEST_LEN))
 	request[4] = byte(REQUEST)
 	binary.BigEndian.PutUint32(request[5:9], uint32(pieceIndex))
 	binary.BigEndian.PutUint32(request[9:13], uint32(blockOffset))
 	binary.BigEndian.PutUint32(request[9:13], uint32(BLOCK_SIZE))
+	return request
+}
+
+func (peer *Peer) requestBlock(pieceIndex int, blockOffset int) error {
+	request := peer.generateRequest(pieceIndex, blockOffset)	
 	var err error
 	for range REQUEST_RETRY_LIMIT {			
 		_, err = peer.conn.Write(request)

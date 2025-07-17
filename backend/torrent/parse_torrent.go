@@ -86,13 +86,6 @@ func castFilePathList(a any) ([]string, error) {
 }
 
 func isMultiFileInfoDictionaryValid(dictionary map[string]any) bool {
-	// some torrents may wrap the info dictionary contents in a collections dictionary	
-	if _, ok := dictionary["collections"]; ok {
-		// if infoDict, ok := collections.(map[string]any); ok {
-		// 	dictionary = infoDict
-		// }
-	}
-
 	if pieceLength, ok := dictionary["piece length"]; ok {
 		if _, ok := pieceLength.(int64); !ok {
 			return false
