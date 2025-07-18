@@ -4,13 +4,13 @@ import (
 	"bittorrent/backend/collections"
 	"bittorrent/backend/utils"
 	"bufio"
-	"bytes"
 	"crypto/sha1"
 	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 type FileInfo struct {
@@ -53,7 +53,7 @@ func isFileListValid(fileList []map[string]any) bool {
 			return false
 		}
 		if path, ok := file["path"]; ok {
-			_, err := castFilePathList(path)
+			_, err := castAnyToSliceOfString(path)
 			if err != nil {
 				return false
 			}
@@ -65,7 +65,7 @@ func isFileListValid(fileList []map[string]any) bool {
 	return true
 }
 
-func castFilePathList(a any) ([]string, error) {
+func castAnyToSliceOfString(a any) ([]string, error) {
     v := reflect.ValueOf(a)
     switch v.Kind() {
     case reflect.Slice, reflect.Array:
@@ -74,7 +74,7 @@ func castFilePathList(a any) ([]string, error) {
 			if val, ok := v.Index(i).Interface().(string); ok {
 				result[i] = val
 			} else {
-				errorMsg := fmt.Sprintf("Unknown value in file path list: %s\n", reflect.ValueOf(val).Kind().String())
+				errorMsg := fmt.Sprintf("Unknown value in slice: %s\n", reflect.ValueOf(val).Kind().String())
 				return nil, errors.New(errorMsg) 
 			}
 		}
@@ -111,7 +111,7 @@ func isMultiFileInfoDictionaryValid(dictionary map[string]any) bool {
 	}
 
 	if files, ok := dictionary["files"]; ok {
-		fileList, err := castFileList(files)
+		fileList, err := castAnyToSliceOfMap(files)
 		if err != nil {
 			return false	
 		}
@@ -126,7 +126,7 @@ func isMultiFileInfoDictionaryValid(dictionary map[string]any) bool {
 }
 
 
-func castFileList(a any) ([]map[string]any, error) {
+func castAnyToSliceOfMap(a any) ([]map[string]any, error) {
     v := reflect.ValueOf(a)
     switch v.Kind() {
     case reflect.Slice, reflect.Array:
@@ -189,13 +189,13 @@ func parseMultiFileInfoDictionary(dictionary map[string]any) (TorrentInfo, error
 	}
 
 	torrentInfo.PieceLength = dictionary["piece length"].(int64)
-	torrentInfo.Pieces = dictionary["pieces"].([]byte)
+	torrentInfo.Pieces = []byte(dictionary["pieces"].(string))
 	torrentInfo.DirectoryName = dictionary["name"].(string)
 
 	var fileInfoList []FileInfo
-	files, _ := castFileList(dictionary["files"])
+	files, _ := castAnyToSliceOfMap(dictionary["files"])
 	for _, file := range files {
-		filePath, _ := castFilePathList(file["path"])
+		filePath, _ := castAnyToSliceOfString(file["path"])
 		fileInfo := FileInfo { Length: file["length"].(int64), Path: filePath }
 
 		if md5sum, ok := file["md5sum"]; ok {
@@ -224,7 +224,7 @@ func parseSingleFileInfoDictionary(dictionary map[string]any) (TorrentInfo, erro
 		return torrentInfo, errors.New("Torrent Metainfo info dictionary formatted incorrectly")
 	}
 	torrentInfo.PieceLength = dictionary["piece length"].(int64)
-	torrentInfo.Pieces = dictionary["pieces"].([]byte)	
+	torrentInfo.Pieces = []byte(dictionary["pieces"].(string))
 	fileInfo := FileInfo { Length: dictionary["length"].(int64), Path: []string{dictionary["name"].(string)} }	
 
 	if md5sum, ok := dictionary["md5sum"]; ok {
@@ -276,40 +276,8 @@ func isTorrentMetainfoFileValid(dictionary map[string]any) bool {
 	return true
 }
 
-func splitAt(substring string) func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	searchBytes := []byte(substring)
-	searchLen := len(searchBytes)
-	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		dataLen := len(data)
-
-		// Return nothing if at end of file and no data passed
-		if atEOF && dataLen == 0 {
-			return 0, nil, nil
-		}
-
-		// Find next separator and return token
-		if i := bytes.Index(data, searchBytes); i >= 0 {
-			return i + searchLen, data[0:i], nil
-		}
-
-		// If we're at EOF, we have a final, non-terminated line. Return it.
-		if atEOF {
-			return dataLen, data, nil
-		}
-
-		// Request more data.
-		return 0, nil, nil
-	}
-}
-
-func extractBencodedInfo(scanner *bufio.Scanner) (string, error) {
-	scanner.Split(splitAt("4:info"))
-
-	bencodedText := ""
-	for scanner.Scan() {
-		bencodedText = scanner.Text()
-	}
-
+func extractBencodedInfo(fileContents []byte) (string, error) {
+	bencodedText := strings.Split(string(fileContents), "4:info")[1]
 	stack := collections.Stack[byte]{}
 	bencodedInfo := ""
 	bencodedTextArr := []byte(bencodedText)
@@ -404,8 +372,8 @@ func ParseTorrentFile(filePath string) (TorrentMetainfo, error) {
 	var torrentMetainfo TorrentMetainfo
 	torrentMetainfo.Info = info
 
-	file.Seek(0, 0)
-	bencodedInfo, err := extractBencodedInfo(bufio.NewScanner(file))
+	fileContents, err := os.ReadFile(filePath)
+	bencodedInfo, err := extractBencodedInfo(fileContents)
 	if err != nil {
 		return TorrentMetainfo{}, nil
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -39,6 +40,7 @@ func (torrentMetainfo *TorrentMetainfo) buildTrackerRequest(torrentState *Torren
 		"downloaded": []string{strconv.FormatInt(torrentState.Downloaded, 10)},
 		"left": []string{strconv.FormatInt(torrentMetainfo.Size, 10)},
 		"compact": []string{"1"},
+		"numwant": []string{"50"},
 	}
 
 	if torrentState.Event != "" {
@@ -69,6 +71,7 @@ func parseDictionaryModelPeers(peers []map[string]any) ([]Peer, error) {
 		if !ok {
 			return peerList, errors.New("ip key in TrackerResponse was not a string")
 		}
+		ipAddress := net.IP([]byte(ip))
 
 		portValue, ok := peerValue["ip"]
 		if !ok {
@@ -79,7 +82,7 @@ func parseDictionaryModelPeers(peers []map[string]any) ([]Peer, error) {
 			return peerList, errors.New("port key in TrackerResponse was not an int")
 		}
 
-		peer := Peer {PeerId: peerId, IpAddress: ip, Port: uint(port)}
+		peer := Peer {PeerId: peerId, IpAddress: ipAddress, Port: uint(port)}
 		peerList = append(peerList, peer)
 	}
 
@@ -94,35 +97,33 @@ func parseBinaryModelPeers(peers string) ([]Peer, error) {
 	}
 	for len(byteArr) >= 6 {
 		peer := byteArr[:6]
-		ipAddress := byteArr[:4]
-		portArr := peer[4:]
-		port := uint(binary.BigEndian.Uint16(portArr))
-		peerList = append(peerList, Peer{ IpAddress: string(ipAddress), Port: port} )
+		ipAddress := net.IP(peer[:4])
+		port := uint(binary.BigEndian.Uint16(peer[4:]))
+		peerList = append(peerList, Peer{ IpAddress: ipAddress, Port: port} )
 		byteArr = byteArr[6:]
 	
 	}
 	return peerList, nil
 }
 
-func parseTrackerResponse(dictionary map[string]any) (int, []Peer, error) {
+func parseTrackerResponse(dictionary map[string]any) (int64, []Peer, error) {
 	peers, ok := dictionary["peers"]
 	if !ok {
 		return 0, []Peer{}, errors.New("No peers key found in tracker response.") 
 	}
 
 	var peerList []Peer
-	if peersDict, ok := peers.([]map[string]any); !ok {
+	peersDict, err := castAnyToSliceOfMap(peers)
+	if err != nil {
 		if peersStr, ok := peers.(string); !ok {	
 			return 0, []Peer{}, errors.New("peers value in tracker response was not in expected binary or dictionary model.") 
 		} else {
-			var err error
 			peerList, err = parseBinaryModelPeers(peersStr)
 			if err != nil {
 				return 0, []Peer{}, err	
 			}
 		}
 	} else {
-		var err error
 		peerList, err = parseDictionaryModelPeers(peersDict)
 		if err != nil {
 			return 0, []Peer{}, err	
@@ -134,7 +135,7 @@ func parseTrackerResponse(dictionary map[string]any) (int, []Peer, error) {
 		return 0, []Peer{}, errors.New("No interval key found in tracker response.")  
 	}
 
-	interval, ok :=  intervalAny.(int); 
+	interval, ok :=  intervalAny.(int64); 
 	if !ok {
 		return 0, []Peer{}, errors.New("interval value in tracker response is not of type int")
 	}
@@ -144,6 +145,7 @@ func parseTrackerResponse(dictionary map[string]any) (int, []Peer, error) {
 
 func (torrentMetainfo *TorrentMetainfo) fetchPeers(peerCh chan []Peer, torrentStateCh chan TorrentState) (error) {	
 	for {
+		fmt.Println("Fetching new peers")
 		torrentState := <-torrentStateCh
 
 		trackerRequestUrl, err := torrentMetainfo.buildTrackerRequest(&torrentState)
@@ -183,9 +185,10 @@ func (torrentMetainfo *TorrentMetainfo) fetchPeers(peerCh chan []Peer, torrentSt
 		if err != nil {
 			return err	
 		}
+		fmt.Printf("Found %d potential peer(s)\n", len(peersList))
 
-		peerCh <- peersList 	
-		time.Sleep(time.Duration(interval))
+		peerCh <- peersList
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 }
 

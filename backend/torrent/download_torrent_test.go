@@ -19,11 +19,11 @@ func generatePieces(pieceCount int) []byte {
 func TestGeneratePieceMap(t *testing.T) {
 	const minPieces = 50
 	const maxPieces = 100
-    nBig, err := rand.Int(rand.Reader, big.NewInt(maxPieces - minPieces)) 
-    if err != nil {
-        panic(err)
-    }
-    pieceCount := int(nBig.Int64() + minPieces)
+	nBig, err := rand.Int(rand.Reader, big.NewInt(maxPieces - minPieces)) 
+	if err != nil {
+		panic(err)
+	}
+	pieceCount := int(nBig.Int64() + minPieces)
 	torrentInfo := TorrentInfo {
 		Pieces: generatePieces(pieceCount),
 	}

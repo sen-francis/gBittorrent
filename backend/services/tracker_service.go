@@ -42,8 +42,6 @@ func (trackerService *TrackerService) Init(ctx context.Context) {
 	trackerService.ctx = ctx
 }
 
-
-
 func parseTrackerScrapeResponse(response string, infoHash string) TrackerScrapeResponse {
 	reader := bufio.NewReaderSize(strings.NewReader(response), len(response))
 
@@ -124,8 +122,6 @@ func (trackerService *TrackerService) ScrapeTracker(torrentMetainfo *torrent.Tor
 	// todo
 	//Convert the body to type string
 	sb := string(body)
-
-
 
 	trackerScrapeResponse := parseTrackerScrapeResponse(sb, string(torrentMetainfo.InfoHash[:]))
 

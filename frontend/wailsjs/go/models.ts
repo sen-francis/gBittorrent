@@ -32,22 +32,6 @@ export namespace services {
 		    return a;
 		}
 	}
-	export class TrackerResponse {
-	    Interval: number;
-	    Peers: string;
-	    Err: any;
-	
-	    static createFrom(source: any = {}) {
-	        return new TrackerResponse(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.Interval = source["Interval"];
-	        this.Peers = source["Peers"];
-	        this.Err = source["Err"];
-	    }
-	}
 	export class TrackerScrapeResponse {
 	    Downloaded: number;
 	    Seeders: number;
@@ -91,7 +75,7 @@ export namespace torrent {
 	}
 	export class TorrentInfo {
 	    PieceLength: number;
-	    Pieces: string;
+	    Pieces: number[];
 	    IsPrivate: boolean;
 	    DirectoryName: string;
 	    FileInfoList: FileInfo[];

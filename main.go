@@ -16,7 +16,7 @@ var assets embed.FS
 func main() {
 	fileUploadService := services.GetFileUploadService()
 	trackerService := services.GetTrackerService()
-
+	torrentService := services.GetTorrentService()
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:  "bittorrent",
@@ -29,10 +29,12 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			fileUploadService.Init(ctx)
 			trackerService.Init(ctx)
+			torrentService.Init(ctx)
 		},
-		Bind: []interface{}{
+		Bind: []any {
 			fileUploadService,
 			trackerService,
+			torrentService,
 		},
 	})
 

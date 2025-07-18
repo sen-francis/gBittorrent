@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"time"
+	"encoding/binary"
 )
 
 const PSTR = "BitTorrent protocol"
@@ -16,7 +17,7 @@ const RESERVED_LEN = 8
 
 type Peer struct {
 	PeerId string 
-	IpAddress string
+	IpAddress net.IP 
 	Port uint
 	conn net.Conn
 	bitfield []byte
@@ -47,10 +48,54 @@ func (peer *Peer) Connect(infoHash [20]byte) (error) {
 	if err != nil {
 		return err
 	}
+	
+	err = peer.sendInterested()
+	if err != nil {
+		return err	
+	}
 
-	// todo sen: send interested + wait for unchoke
-
+	err = peer.waitForUnchoke()
+	if err != nil {
+		return err	
+	}
+	fmt.Printf("Connected to peer: %s\n", peer.String())
 	return nil
+}
+const INTERESTED_LEN = 1
+func (peer *Peer) generateInterested() []byte {
+	interested := make([]byte, 5)
+	binary.BigEndian.PutUint32(interested[0:4], uint32(INTERESTED_LEN))
+	interested[4] = byte(INTERESTED)
+	return interested
+}
+
+func (peer *Peer) sendInterested() error {
+	interested := peer.generateInterested()
+	_, err := peer.conn.Write(interested)
+	if err != nil {
+		return peer.handleConnectionFailure(err.Error())	
+	}
+	return nil	
+}
+
+func (peer *Peer) waitForUnchoke() error {
+	for {
+		deadline := time.Now().Add(2 * time.Minute)
+		rawMessage, err := peer.readWithDeadline(deadline) 
+		if err != nil {
+			return err	
+		}
+		message := parseMessage(rawMessage)
+		switch message.messageType {
+		case KEEP_ALIVE:
+			continue	
+		case UNCHOKE:
+			return nil
+		default:
+			errorMsg := fmt.Sprintf("Recieve unknown message from peer while waiting for unchoke:%s, %s\n", message.String(), peer.String())
+			return errors.New(errorMsg)
+		}
+	}
 }
 
 func (peer *Peer) generateHandshake(infoHash [20]byte) []byte {
@@ -126,7 +171,7 @@ func (peer *Peer) handleConnectionFailure(failureReason string) error {
 }
 
 func (peer *Peer) String() string {
-	return peer.IpAddress + ":" + strconv.FormatUint(uint64(peer.Port), 10)
+	return net.JoinHostPort(peer.IpAddress.String(), strconv.Itoa(int(peer.Port)))
 }
 
 func (peer *Peer) validateHandshake(handshake []byte, infoHash [20]byte) bool {
@@ -137,12 +182,16 @@ func (peer *Peer) validateHandshake(handshake []byte, infoHash [20]byte) bool {
 	
 	infoHashStartIndex := 1 + pStrLen + RESERVED_LEN 
 	receivedInfoHash := handshake[infoHashStartIndex: len(handshake) - 20]
-	if bytes.Equal(receivedInfoHash, infoHash[:]){
+	if !bytes.Equal(receivedInfoHash, infoHash[:]){
 		return false	
 	}
 	
 	peerIdStartIndex := infoHashStartIndex + len(infoHash)
 	receivedPeerId := string(handshake[peerIdStartIndex:])
+	if peer.PeerId == "" {
+		peer.PeerId = receivedPeerId	
+	}
+
 	if receivedPeerId != peer.PeerId {
 		return false	
 	}

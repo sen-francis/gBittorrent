@@ -1,6 +1,7 @@
 import './Client.css';
 import {useEffect, useState, useRef} from 'react';
 import {SelectFile} from '../../wailsjs/go/services/FileUploadService'
+import {DownloadTorrent} from '../../wailsjs/go/services/TorrentService'
 import {services, torrent} from '../../wailsjs/go/models'
 import {ScrapeTracker} from '../../wailsjs/go/services/TrackerService'
 import { Modal } from '../components/Modal';
@@ -72,13 +73,13 @@ const Menu = () => {
 	const addTorrent = () => {
 		SelectFile().then((data) => {
 			setTorrentData(data);
-			scrapeTracker();
+			scrapeTracker(data);
 		});
 	}
 
-	const scrapeTracker = () => {
-		if (torrentData?.TorrentMetainfo) {	
-			ScrapeTracker(torrentData.TorrentMetainfo).then((data) => {
+	const scrapeTracker = (data: services.FileUploadResponse) => {
+		if (data?.TorrentMetainfo) {	
+			ScrapeTracker(data.TorrentMetainfo).then((data) => {
 				setScrapeTrackerData(data);
 				setIsModalOpen(true);
 			});
@@ -91,10 +92,17 @@ const Menu = () => {
 		setIsModalOpen(false);
 	}
 
+	const onModalSubmit = () => {
+		if (!torrentData?.TorrentMetainfo) {
+			return;	
+		}
+		DownloadTorrent(torrentData.TorrentMetainfo);
+	}
+
 	return <div>
 		<button onClick={() => addTorrent()}>Add</button>
 		<button>Remove</button>
-		<Modal onClose={onModalClose} isModalOpen={isModalOpen} submitText="Download" onSubmit={() => {}}>
+		<Modal onClose={onModalClose} isModalOpen={isModalOpen} submitText="Download" onSubmit={onModalSubmit}>
 			{(torrentData?.TorrentMetainfo && scrapeTrackerData != null) && <>
 				<TorrentInformation torrentMetainfo={torrentData.TorrentMetainfo} scrapeTrackerData={scrapeTrackerData} />
 				<TorrentFileInformation torrentInfo={torrentData.TorrentMetainfo.Info}/>

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 )
 
 func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
@@ -26,7 +25,9 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 		Uploaded: 0, 
 		PeerId: GeneratePeerId(),
 	}
-	torrentStateCh <- torrentState
+	go func() {
+		torrentStateCh <- torrentState
+	}()
 	mutex := sync.Mutex{
 	}
 	go torrentMetainfo.fetchPeers(peerCh, torrentStateCh)
@@ -36,7 +37,7 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 				go func() {
 					err := peer.Connect(torrentMetainfo.InfoHash)
 					if err != nil {
-						fmt.Printf("Failed to connect to peer: %s", peer.String())
+						fmt.Printf("Failed to connect to peer: %s, %s\n", peer.String(), err.Error())
 					}
 					mutex.Lock()
 					peerQueue.Push(peer)
@@ -47,20 +48,26 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 	}()
 	
 	pieceMap := torrentMetainfo.generatePieceMap()
+	sentNoPeersMsg := false
 	for len(pieceMap) > 0 {
 		if peerQueue.IsEmpty() {
-			fmt.Println("No peers available")
+			if !sentNoPeersMsg {
+				fmt.Println("No peers available")
+				sentNoPeersMsg = true
+			}
 			continue	
+		} else {
+			sentNoPeersMsg = false	
 		}
 
 		peer, _ := peerQueue.Pop()
 		if !peer.IsActive {
-			fmt.Printf("Removed flaky peer from queue: %s", peer.String())
+			fmt.Printf("Removed flaky peer from queue: %s\n", peer.String())
 			continue	
 		}
 		pieceIndex, err := peer.GetFirstAvailablePieceIndex(pieceMap)
 		if err != nil {
-			fmt.Printf("Removing peer from queue: %s", err.Error())
+			fmt.Printf("Removing peer from queue: %s\n", err.Error())
 			continue
 		}
 
@@ -177,20 +184,6 @@ const BLOCK_SIZE = 16384
 
 var CHOKE_ERR = errors.New("Choked by peer") 
 
-func (peer *Peer) waitForUnchoke() error {
-	deadline := time.Now().Add(10 * time.Minute)
-	rawMessage, err := peer.readWithDeadline(deadline) 
-	if err != nil {
-		return err	
-	}
-	message := parseMessage(rawMessage)
-	if message.messageType != UNCHOKE {
-		errorMsg := fmt.Sprintf("Recieve unknown message from peer while waiting for unchoke:%s, %s\n", message.String(), peer.String())
-		return errors.New(errorMsg)
-	}
-	
-	return nil
-}
 
 const REQUEST_RETRY_LIMIT = 3
 
