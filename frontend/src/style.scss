@@ -1,7 +1,7 @@
-@import 'themes/colors.scss';
+@import 'themes/variables.scss';
 
 html {
-    background-color: $main-bg-color;
+    background-color: $bg-color-primary;
     text-align: center;
     color: white;
 }
@@ -25,4 +25,8 @@ body {
 #app {
     height: 100vh;
     text-align: center;
+}
+
+svg {
+  stroke-width: 2;
 }

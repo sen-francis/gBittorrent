@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "sass": "^1.89.2"
+  },
+  "dependencies": {
+    "vite-plugin-svgr": "^4.3.0"
   }
 }

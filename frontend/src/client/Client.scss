@@ -1,3 +1,5 @@
+@import '../themes/variables.scss';
+
 .add-torrent-modal__body {
 	display: flex;
 	flex-direction: row;
@@ -28,6 +30,23 @@ dialog[open]:modal {
   background: hsl(0 0% 10% / 0.5);
 }
 
-.toolbar {
-		
+.torrent {
+  display: flex;
+  padding: $spacing-l;
+}
+
+
+.torrent:nth-child(odd) {
+  background-color: $bg-color-secondary;
+}
+
+.torrent_info {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: start;
+}
+
+.torrent_info_details {
+  font-size: $font-size-m;
 }

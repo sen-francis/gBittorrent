@@ -5,6 +5,9 @@ import {DownloadTorrent} from '../../../wailsjs/go/services/TorrentService';
 import {services, torrent} from '../../../wailsjs/go/models';
 import {ScrapeTracker} from '../../../wailsjs/go/services/TrackerService';
 import { Modal } from '../../components/Modal/Modal';
+import { Button } from '../../components/Button/Button';
+import Folder from "../../assets/images/folder.svg?react"
+import Trash from "../../assets/images/trash.svg?react"
 
 const BYTES_IN_GB = 1000000000;
 const BYTES_IN_MB = 1000000;
@@ -100,8 +103,12 @@ export const Toolbar = () => {
 	}
 
 	return <div className='toolbar'>
-		<button onClick={() => addTorrent()}>Add</button>
-		<button>Remove</button>
+		<Button buttonText="Open" onClick={() => addTorrent()}>
+			<Folder/>
+		</Button>
+		<Button buttonText="Remove" onClick={() => {}}>
+			<Trash/>
+		</Button>
 		<Modal onClose={onModalClose} isModalOpen={isModalOpen} submitText="Download" onSubmit={onModalSubmit}>
 			{(torrentData?.TorrentMetainfo && scrapeTrackerData != null) && <>
 				<TorrentInformation torrentMetainfo={torrentData.TorrentMetainfo} scrapeTrackerData={scrapeTrackerData} />
