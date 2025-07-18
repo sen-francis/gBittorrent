@@ -1,3 +1,5 @@
+import './Button.scss';
+
 interface ButtonProps {
 	buttonText: string,
 	onClick: () => void,
@@ -6,7 +8,7 @@ interface ButtonProps {
 
 export const Button = (props: ButtonProps) => {
 	const {buttonText, onClick, children} = props;
-	return 	<div onClick={onClick}>
+	return 	<div className="button" onClick={onClick}>
 		{children}
 		<div>{buttonText}</div>
 	</div>
