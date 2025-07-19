@@ -30,6 +30,7 @@ type TorrentInfo struct {
 type TorrentMetainfo struct {
 	Info TorrentInfo
 	InfoHash [20]byte
+	InfoHashStr string
 	Announce string
 	AnnounceList [][]string
 	CreationDate int
@@ -378,6 +379,7 @@ func ParseTorrentFile(filePath string) (TorrentMetainfo, error) {
 		return TorrentMetainfo{}, nil
 	}
 	torrentMetainfo.InfoHash = sha1.Sum([]byte(bencodedInfo))
+	torrentMetainfo.InfoHashStr = string(torrentMetainfo.InfoHash[:])
 
 	torrentMetainfo.Announce = dictionary["announce"].(string)
 

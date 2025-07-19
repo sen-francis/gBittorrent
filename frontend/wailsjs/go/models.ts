@@ -114,6 +114,7 @@ export namespace torrent {
 	export class TorrentMetainfo {
 	    Info: TorrentInfo;
 	    InfoHash: number[];
+	    InfoHashStr: string;
 	    Announce: string;
 	    AnnounceList: string[][];
 	    CreationDate: number;
@@ -130,6 +131,7 @@ export namespace torrent {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Info = this.convertValues(source["Info"], TorrentInfo);
 	        this.InfoHash = source["InfoHash"];
+	        this.InfoHashStr = source["InfoHashStr"];
 	        this.Announce = source["Announce"];
 	        this.AnnounceList = source["AnnounceList"];
 	        this.CreationDate = source["CreationDate"];

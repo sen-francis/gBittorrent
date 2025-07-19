@@ -1,13 +1,15 @@
 import './Toolbar.scss';
-import {useEffect, useState, useRef} from 'react';
+import {useEffect, useState, useRef, useContext} from 'react';
 import {SelectFile} from '../../../wailsjs/go/services/FileUploadService';
 import {DownloadTorrent} from '../../../wailsjs/go/services/TorrentService';
 import {services, torrent} from '../../../wailsjs/go/models';
 import {ScrapeTracker} from '../../../wailsjs/go/services/TrackerService';
+import {EventsEmit} from '../../../wailsjs/runtime/runtime';
 import { Modal } from '../../components/Modal/Modal';
 import { Button } from '../../components/Button/Button';
 import Folder from "../../assets/images/folder.svg?react"
 import Trash from "../../assets/images/trash.svg?react"
+import { ClientContext } from '../Client';
 
 const BYTES_IN_GB = 1000000000;
 const BYTES_IN_MB = 1000000;
@@ -72,7 +74,7 @@ export const Toolbar = () => {
 	const [torrentData, setTorrentData] = useState<services.FileUploadResponse>();
 	const [scrapeTrackerData, setScrapeTrackerData] = useState<services.TrackerScrapeResponse>();
 	const [isModalOpen, setIsModalOpen] = useState<boolean>(false);	
-
+	const {torrentList, setTorrentList} = useContext(ClientContext);
 	const addTorrent = () => {
 		SelectFile().then((data) => {
 			setTorrentData(data);
@@ -90,8 +92,8 @@ export const Toolbar = () => {
 	}
 
 	const onModalClose = () => {
-		setScrapeTrackerData({} as services.TrackerScrapeResponse);
-		setTorrentData({} as services.FileUploadResponse);
+	//	setScrapeTrackerData({} as services.TrackerScrapeResponse);
+	//	setTorrentData({} as services.FileUploadResponse);
 		setIsModalOpen(false);
 	}
 
@@ -100,13 +102,22 @@ export const Toolbar = () => {
 			return;	
 		}
 		DownloadTorrent(torrentData.TorrentMetainfo);
+		setIsModalOpen(false);
+		setTorrentList([torrentData, ...torrentList]);
+	}
+
+	const stopTorrentDownload = () => {
+		if (!torrentData?.TorrentMetainfo?.InfoHashStr) {
+			return;	
+		}
+		EventsEmit(torrentData.TorrentMetainfo.InfoHashStr)
 	}
 
 	return <div className='toolbar'>
 		<Button buttonText="Open" onClick={() => addTorrent()}>
 			<Folder/>
 		</Button>
-		<Button buttonText="Remove" onClick={() => {}}>
+		<Button buttonText="Remove" onClick={() => stopTorrentDownload()}>
 			<Trash/>
 		</Button>
 		<Modal onClose={onModalClose} isModalOpen={isModalOpen} submitText="Download" onSubmit={onModalSubmit}>

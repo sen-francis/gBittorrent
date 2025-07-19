@@ -3,6 +3,7 @@ package torrent
 import (
 	"bittorrent/backend/utils"
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -143,7 +144,7 @@ func parseTrackerResponse(dictionary map[string]any) (int64, []Peer, error) {
 	return interval, peerList, nil
 }
 
-func (torrentMetainfo *TorrentMetainfo) fetchPeers(peerCh chan []Peer, torrentStateCh chan TorrentState) (error) {	
+func (torrentMetainfo *TorrentMetainfo) fetchPeers(peerCh chan []Peer, torrentStateCh chan TorrentState, ctx context.Context) (error) {	
 	for {
 		fmt.Println("Fetching new peers")
 		torrentState := <-torrentStateCh

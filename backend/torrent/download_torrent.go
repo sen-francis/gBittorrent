@@ -3,6 +3,7 @@ package torrent
 import (
 	"bittorrent/backend/collections"
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/binary"
 	"errors"
@@ -10,10 +11,21 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-)
 
-func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+var cancel context.CancelFunc
+
+func stopDownload (... any) {
+	cancel()
+}
+
+func (torrentMetainfo *TorrentMetainfo) StartDownload(ctx context.Context)  {
+	cancelCtx, cancelFunc := context.WithCancel(ctx)
+	cancel = cancelFunc
+	runtime.EventsOn(ctx, torrentMetainfo.InfoHashStr, stopDownload)
 	peerQueue := collections.Queue[Peer]{}
+	connectedPeerIps := sync.Map{}
 	peerCh := make(chan []Peer)
 	torrentStateCh := make(chan TorrentState)
 	defer close(peerCh)
@@ -28,12 +40,14 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 	go func() {
 		torrentStateCh <- torrentState
 	}()
-	mutex := sync.Mutex{
-	}
-	go torrentMetainfo.fetchPeers(peerCh, torrentStateCh)
+	mutex := sync.Mutex{}
+	go torrentMetainfo.fetchPeers(peerCh, torrentStateCh, cancelCtx)
 	go func() {
 		for peerList := range peerCh {
 			for _, peer := range peerList {
+				if _, ok := connectedPeerIps.Load(peer.String()); ok {
+					continue	
+				}
 				go func() {
 					err := peer.Connect(torrentMetainfo.InfoHash)
 					if err != nil {
@@ -41,6 +55,7 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 					}
 					mutex.Lock()
 					peerQueue.Push(peer)
+					connectedPeerIps.Store(peer.String(), true)
 					mutex.Unlock()
 				}()
 			}
@@ -50,6 +65,12 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 	pieceMap := torrentMetainfo.generatePieceMap()
 	sentNoPeersMsg := false
 	for len(pieceMap) > 0 {
+		select {
+		case <-cancelCtx.Done():
+			fmt.Printf("Recieved cancel event, stopping download\n")
+			return
+		default:
+		}
 		if peerQueue.IsEmpty() {
 			if !sentNoPeersMsg {
 				fmt.Println("No peers available")
@@ -62,12 +83,14 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 
 		peer, _ := peerQueue.Pop()
 		if !peer.IsActive {
-			fmt.Printf("Removed flaky peer from queue: %s\n", peer.String())
+			fmt.Printf("Removed peer from queue: %s\n", peer.String())
+			connectedPeerIps.Delete(peer.String())
 			continue	
 		}
 		pieceIndex, err := peer.GetFirstAvailablePieceIndex(pieceMap)
 		if err != nil {
 			fmt.Printf("Removing peer from queue: %s\n", err.Error())
+			connectedPeerIps.Delete(peer.String())
 			continue
 		}
 
@@ -87,18 +110,21 @@ func (torrentMetainfo *TorrentMetainfo) StartDownload()  {
 				if err != nil {
 					fmt.Printf("Peer did not unchoke within 10 minutes. Discarding peer: %s, %s\n", err.Error(), peer.String())	
 					peer.closeConnection()
+					connectedPeerIps.Delete(peer.String())
 					return
 				}
 			}
 			if err != nil {
 				fmt.Printf("Discarding peer: %s\n", peer.String())
 				peer.closeConnection()
+				connectedPeerIps.Delete(peer.String())
 				return
 			}
 			mutex.Lock()	
 			if !torrentMetainfo.verifyPiece(pieceHash, downloadedPiece) {	
 				fmt.Printf("Could not verify downloaded piece from peer. Discarding peer: %s\n", peer.String())
 				peer.closeConnection()
+				connectedPeerIps.Delete(peer.String())
 				mutex.Unlock()
 				return
 			}

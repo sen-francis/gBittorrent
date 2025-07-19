@@ -24,6 +24,6 @@ func (torrentService *TorrentService) Init(ctx context.Context) {
 }
 
 func (torrentService *TorrentService) DownloadTorrent(torrentMetainfo torrent.TorrentMetainfo) {
-	torrentMetainfo.StartDownload()
+	torrentMetainfo.StartDownload(torrentService.ctx)
 }
 
