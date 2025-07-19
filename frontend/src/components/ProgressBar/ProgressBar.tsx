@@ -7,8 +7,12 @@ interface ProgressBarProps {
 
 export const ProgressBar = (props: ProgressBarProps) => {
 	const {progress, total} = props;
-
-	return <div className="progress-bar">
-		<div className="progress-bar__progress" style={{width: `${(progress / total) * 100}%`}}/>
+	const isComplete = progress == total;
+	let progressBarClasses = ["progress-bar"]
+	if (isComplete) {
+		progressBarClasses.push("progress-bar--complete");
+	}
+	return <div className={progressBarClasses.join(" ")}>
+		{!isComplete && <div className="progress-bar__progress" style={{width: `${(progress / total) * 100}%`}}/>}
 	</div>
 }

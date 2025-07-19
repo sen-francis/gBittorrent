@@ -4,11 +4,9 @@ import {SelectFile} from '../../../wailsjs/go/services/FileUploadService';
 import {DownloadTorrent} from '../../../wailsjs/go/services/TorrentService';
 import {services, torrent} from '../../../wailsjs/go/models';
 import {ScrapeTracker} from '../../../wailsjs/go/services/TrackerService';
-import {EventsEmit} from '../../../wailsjs/runtime/runtime';
 import { Modal } from '../../components/Modal/Modal';
 import { Button } from '../../components/Button/Button';
 import Folder from "../../assets/images/folder.svg?react"
-import Trash from "../../assets/images/trash.svg?react"
 import { ClientContext } from '../Client';
 
 const BYTES_IN_GB = 1000000000;
@@ -106,21 +104,11 @@ export const Toolbar = () => {
 		setTorrentList([torrentData, ...torrentList]);
 	}
 
-	const stopTorrentDownload = () => {
-		if (!torrentData?.TorrentMetainfo?.InfoHashStr) {
-			return;	
-		}
-		EventsEmit(torrentData.TorrentMetainfo.InfoHashStr)
-	}
-
 	return <div className='toolbar'>
 		<Button buttonText="Open" onClick={() => addTorrent()}>
 			<Folder/>
 		</Button>
-		<Button buttonText="Remove" onClick={() => stopTorrentDownload()}>
-			<Trash/>
-		</Button>
-		<Modal onClose={onModalClose} isModalOpen={isModalOpen} submitText="Download" onSubmit={onModalSubmit}>
+	<Modal onClose={onModalClose} isModalOpen={isModalOpen} submitText="Download" onSubmit={onModalSubmit}>
 			{(torrentData?.TorrentMetainfo && scrapeTrackerData != null) && <>
 				<TorrentInformation torrentMetainfo={torrentData.TorrentMetainfo} scrapeTrackerData={scrapeTrackerData} />
 				<TorrentFileInformation torrentInfo={torrentData.TorrentMetainfo.Info}/>

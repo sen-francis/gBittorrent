@@ -33,6 +33,7 @@ dialog[open]:modal {
 .torrent {
   display: flex;
   padding: $spacing-l;
+  align-items: center;
 }
 
 
@@ -49,4 +50,20 @@ dialog[open]:modal {
 
 .torrent_info_details {
   font-size: $font-size-m;
+}
+
+.torrent_info_progress-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  gap: $spacing-s;
+
+  .button {
+    &, svg {
+      width: 25px;
+      height: 25px;
+      padding: 0;
+    }
+  }
 }
